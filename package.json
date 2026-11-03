@@ -1,0 +1,29 @@
+{
+  "name": "futuro",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Free-data football prediction research and tracking backend",
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "build": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "demo": "tsx scripts/demo.ts",
+    "import:openfootball": "tsx scripts/import.ts",
+    "backtest": "tsx scripts/backtest.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.0",
+    "@nestjs/core": "^11.1.0",
+    "@nestjs/platform-express": "^11.1.0",
+    "dotenv": "^16.5.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": { "node": ">=22.13.0" }
+}

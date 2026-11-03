@@ -1,0 +1,32 @@
+# Installed dependencies
+node_modules/
+.venv/
+venv/
+
+# Local secrets; keep the setup template
+.env
+.env.*
+!.env.example
+
+# Downloaded data and local databases
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+
+# Generated output and caches
+dist/
+build/
+coverage/
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local logs and OS files
+*.log
+.DS_Store
+Thumbs.db
