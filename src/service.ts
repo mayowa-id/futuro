@@ -6,7 +6,8 @@ import { Store } from './store';
 
 const probabilitiesSchema = z.object(Object.fromEntries(marketSchema.options.map(m => [m, z.number().min(0).max(1)])) as Record<Market, z.ZodNumber>);
 const modelSchema = z.object({ modelVersion: z.string(), rates: z.array(z.number().finite()).length(2),
-  probabilities: probabilitiesSchema, calibrated: z.literal(false), limitations: z.array(z.string()) });
+  probabilities: probabilitiesSchema, calibrated: z.literal(false), limitations: z.array(z.string()),
+  artifactHash: z.string().regex(/^[a-f0-9]{64}$/).optional(), specification: z.record(z.unknown()).optional() });
 export type ModelResult = z.infer<typeof modelSchema>;
 export type Scorer = (features: ReturnType<typeof buildFeatures>) => Promise<ModelResult>;
 export const httpScorer: Scorer = async features => {

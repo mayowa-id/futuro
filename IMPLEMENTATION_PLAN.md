@@ -1,8 +1,10 @@
 # Futuro implementation approach
 
-Status: design ready for an initial implementation; live coverage and model performance are unverified. Data budget is $0. See REQUIREMENTS.md and FREE_DATA_PLAN.md; the latter supersedes the paid recommendations in DATA_PROVIDER_REVIEW.md.
+Status: initial local backend and research schema implemented; live coverage and model performance are unverified. Data budget is $0. See REQUIREMENTS.md and FREE_DATA_PLAN.md; the latter supersedes the paid recommendations in DATA_PROVIDER_REVIEW.md.
 
 Implementation update: the initial local backend now uses NestJS, embedded SQLite, and a dependency-free Python HTTP scoring service. This keeps the first version runnable without PostgreSQL/Redis or Python package installation. PostgreSQL, FastAPI, queue workers, and the frontend remain later milestones. README.md documents the implemented endpoints, manual workflows, testing, and limitations; live data coverage/model calibration are still unverified.
+
+Research update: schema version 2 preserves normalized fixtures/results/statistics, immutable prediction/model/feature histories, frozen chronological datasets and evaluations, and expanded calibration/variance diagnostics. See SCHEMA.md. Training provenance tables exist; automatic model training and promotion remain future work.
 
 ## First vertical slice
 

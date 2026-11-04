@@ -9,7 +9,8 @@
     "test": "tsx --test test/*.test.ts",
     "demo": "tsx scripts/demo.ts",
     "import:openfootball": "tsx scripts/import.ts",
-    "backtest": "tsx scripts/backtest.ts"
+    "backtest": "tsx scripts/backtest.ts",
+    "db:inspect": "tsx scripts/inspect-db.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",

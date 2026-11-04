@@ -2,6 +2,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { Evidence, Fixture, hash, Mode } from './domain';
+import { protectHistory, schemaV2 } from './schema';
+import { projectEvidence, projectFixture, projectPrediction, projectSettlement, seedMarkets } from './projections';
 
 export class Store {
   readonly db: DatabaseSync;
@@ -21,25 +23,58 @@ export class Store {
       CREATE TABLE IF NOT EXISTS provider_requests (id INTEGER PRIMARY KEY, provider TEXT NOT NULL, requested_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS response_cache (key TEXT PRIMARY KEY, captured_at TEXT NOT NULL, payload TEXT NOT NULL);
     `);
+    const version = Number(this.db.prepare('SELECT MAX(version) AS version FROM schema_version').get()?.version);
+    if (version < 2) {
+      if (path !== ':memory:' && Number(this.db.prepare('SELECT COUNT(*) AS n FROM fixture_revisions').get()?.n) > 0)
+        this.db.prepare('VACUUM INTO ?').run(`${path}.pre-v2-${Date.now()}.sqlite`);
+      try { this.atomic(() => {
+      this.db.exec(schemaV2);
+      seedMarkets(this.db);
+      for (const row of this.db.prepare('SELECT revision_id,payload FROM fixture_revisions ORDER BY revision_id').all())
+        projectFixture(this.db, JSON.parse(String(row.payload)), Number(row.revision_id));
+      for (const e of this.db.prepare('SELECT payload FROM evidence').all()) projectEvidence(this.db, JSON.parse(String(e.payload)));
+      for (const p of this.db.prepare('SELECT payload FROM predictions ORDER BY rowid').all()) projectPrediction(this.db, JSON.parse(String(p.payload)));
+      for (const s of this.db.prepare('SELECT id,payload FROM settlements ORDER BY rowid').all()) projectSettlement(this.db, String(s.id), JSON.parse(String(s.payload)), null);
+      protectHistory(this.db);
+      this.db.prepare('INSERT INTO schema_version VALUES (2)').run();
+      }); } catch (error) { this.db.close(); throw error; }
+    }
+  }
+  private atomic<T>(fn: () => T): T {
+    this.db.exec('BEGIN IMMEDIATE');
+    try { const result = fn(); this.db.exec('COMMIT'); return result; }
+    catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
   close() { this.db.close(); }
   ingest(provider: string, capturedAt: string, raw: unknown, fixtures: Fixture[]) {
     this.db.exec('BEGIN IMMEDIATE');
     try {
-      this.db.prepare('INSERT OR IGNORE INTO raw_observations VALUES (?, ?, ?, ?)').run(hash([provider, raw]), provider, capturedAt, JSON.stringify(raw));
+      const rawId = hash([provider, raw]);
+      this.db.prepare('INSERT OR IGNORE INTO raw_observations VALUES (?, ?, ?, ?)').run(rawId, provider, capturedAt, JSON.stringify(raw));
       for (const f of fixtures) {
         const payload = JSON.stringify(f);
         const current = this.fixture(f.id);
         // A date-only fallback must not replace a verified provider kickoff/status.
         if (current?.provider === 'football-data' && f.provider === 'openfootball') continue;
         // Same snapshot is a no-op, including a repeat download at a later time.
-        if (current && hash({ ...current, observedAt: '' }) === hash({ ...f, observedAt: '' })) continue;
+        if (current && hash({ ...current, observedAt: '' }) === hash({ ...f, observedAt: '' })) {
+          this.db.prepare('INSERT OR IGNORE INTO fixture_provenance VALUES (?,?)').run(this.revisionId(current), rawId);
+          continue;
+        }
         this.db.prepare('INSERT OR IGNORE INTO fixture_revisions(id, observed_at, payload) VALUES (?, ?, ?)').run(f.id, f.observedAt, payload);
         if (!current || current.observedAt <= f.observedAt)
           this.db.prepare('INSERT INTO fixtures VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload').run(f.id, payload);
+        projectFixture(this.db, f, this.revisionId(f));
+        this.db.prepare('INSERT OR IGNORE INTO fixture_provenance VALUES (?,?)').run(this.revisionId(f), rawId);
       }
       this.db.exec('COMMIT');
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
+  revisionId(f: Fixture): number {
+    const row = this.db.prepare('SELECT revision_id FROM fixture_revisions WHERE id=? AND observed_at=? AND payload=? ORDER BY revision_id DESC LIMIT 1')
+      .get(f.id, f.observedAt, JSON.stringify(f));
+    if (!row) throw new Error('Fixture revision not found');
+    return Number(row.revision_id);
   }
   fixtures(): Fixture[] { return this.db.prepare('SELECT payload FROM fixtures').all().map(r => JSON.parse(String(r.payload))); }
   fixture(id: string): Fixture | undefined {
@@ -53,20 +88,30 @@ export class Store {
     ) WHERE n=1`).all(cutoff).map(r => JSON.parse(String(r.payload)));
   }
   addEvidence(e: Evidence) {
-    this.db.prepare('INSERT INTO evidence VALUES (?, ?, ?)').run(e.id, e.fixtureId, JSON.stringify(e));
+    this.atomic(() => {
+      this.db.prepare('INSERT INTO evidence VALUES (?, ?, ?)').run(e.id, e.fixtureId, JSON.stringify(e));
+      projectEvidence(this.db, e);
+    });
   }
   evidence(fixtureId: string): Evidence[] {
     return this.db.prepare('SELECT payload FROM evidence WHERE fixture_id=?').all(fixtureId).map(r => JSON.parse(String(r.payload)));
   }
-  savePrediction(p: { id: string; fixtureId: string; mode: Mode }) {
-    this.db.prepare('INSERT INTO predictions VALUES (?, ?, ?, ?)').run(p.id, p.fixtureId, p.mode, JSON.stringify(p));
+  savePrediction(p: any) {
+    this.atomic(() => {
+      this.db.prepare('INSERT INTO predictions VALUES (?, ?, ?, ?)').run(p.id, p.fixtureId, p.mode, JSON.stringify(p));
+      projectPrediction(this.db, p);
+    });
   }
   predictions(mode?: Mode): any[] {
     const rows = mode ? this.db.prepare('SELECT payload FROM predictions WHERE mode=?').all(mode) : this.db.prepare('SELECT payload FROM predictions').all();
     return rows.map(r => JSON.parse(String(r.payload)));
   }
   saveSettlement(predictionId: string, payload: unknown) {
-    this.db.prepare('INSERT OR IGNORE INTO settlements VALUES (?, ?, ?)').run(hash([predictionId, payload]), predictionId, JSON.stringify(payload));
+    this.atomic(() => {
+      const id = hash([predictionId, payload]);
+      this.db.prepare('INSERT OR IGNORE INTO settlements VALUES (?, ?, ?)').run(id, predictionId, JSON.stringify(payload));
+      projectSettlement(this.db, id, payload, new Date().toISOString());
+    });
   }
   settlements(): any[] { return this.db.prepare('SELECT payload FROM settlements ORDER BY rowid').all().map(r => JSON.parse(String(r.payload))); }
   requestSlot(provider: string, now: string, perMinute: number) {

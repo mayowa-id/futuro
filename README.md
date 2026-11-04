@@ -117,6 +117,8 @@ External sources are optional. In this baseline, injuries/context/source opinion
 
 ## API
 
+The relational research schema, variance definitions, dataset/evaluation API and migration behavior are documented in [SCHEMA.md](SCHEMA.md). `GET /analytics` provides the expanded diagnostics; `GET /performance` retains the original summary for compatibility.
+
 | Method | Route | Purpose |
 | --- | --- | --- |
 | GET | `/health`, `/capabilities` | Service status and explicit supported/missing capabilities |
@@ -151,6 +153,8 @@ Tests cover provider parsing, regulation-time scores, idempotency, cutoff leakag
 ## Current scope and next steps
 
 Implemented: local NestJS API, standard-library Python scoring service, SQLite persistence/revision schema, two free-data adapters, manual evidence, historical replay, analytical settlement, and performance reporting.
+
+Schema version 2 adds normalized football/results/statistics records, exact new feature-input lineage, model artifact/configuration registration, calibration and variance diagnostics, frozen chronological datasets, and immutable evaluation comparisons. Completed match corner/shot/xG observations can be recorded manually; they are not automatically used by the goal model. Training-job tables are present, but an automatic trainer is still pending.
 
 Deferred: frontend, PostgreSQL adapter, Redis/BullMQ workers, automated article/injury/odds ingestion, model calibration/tuning, corner models, secondary-league adapters, bookmaker-specific void handling, and public authentication. SQLite and Python's standard HTTP server keep this local milestone dependency-light; the documented PostgreSQL/FastAPI/queue direction can be introduced as usage requires it.
 

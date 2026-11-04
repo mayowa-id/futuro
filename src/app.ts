@@ -6,6 +6,9 @@ import { competitionSchema, modeSchema, timestamp } from './domain';
 import { Providers, seasonSchema } from './providers';
 import { Futuro } from './service';
 import { Store } from './store';
+import { Analytics } from './analytics';
+import { Research } from './research';
+import { marketSchema } from './domain';
 
 @Catch()
 class ApiErrors implements ExceptionFilter {
@@ -64,6 +67,25 @@ class ApiController {
   }
   @Get('performance') performance(@Query() query: unknown) {
     return this.futuro.performance(z.object({ mode: modeSchema.default('live') }).parse(query).mode);
+  }
+  @Get('analytics') analytics(@Query() query: unknown) {
+    const input = z.object({ mode: modeSchema.default('live'), modelId: z.string().optional(),
+      market: marketSchema.optional(), competition: competitionSchema.optional(),
+      selection: z.enum(['all','preference_passed']).default('all') }).parse(query);
+    return new Analytics(this.futuro.store).report(input);
+  }
+  @Get('models') models() { return new Research(this.futuro.store).models(); }
+  @Get('sources/performance') sourcePerformance() { return new Analytics(this.futuro.store).sourceReport(); }
+  @Post('statistics') addStatistic(@Body() body: unknown) { return new Research(this.futuro.store).addStatistic(body); }
+  @Get('fixtures/:id/statistics') statistics(@Param('id') id: string) { return new Research(this.futuro.store).statistics(id); }
+  @Post('datasets') createDataset(@Body() body: unknown) { return new Research(this.futuro.store).createDataset(body); }
+  @Get('datasets') datasets() { return new Research(this.futuro.store).datasets(); }
+  @Get('datasets/:id') dataset(@Param('id') id: string) { return new Research(this.futuro.store).dataset(id); }
+  @Post('evaluations') createEvaluation(@Body() body: unknown) { return new Research(this.futuro.store).createEvaluation(body); }
+  @Get('evaluations') evaluations() { return new Research(this.futuro.store).evaluations(); }
+  @Post('evaluations/compare') compare(@Body() body: unknown) {
+    const input = z.object({ leftId: z.string(), rightId: z.string() }).parse(body);
+    return new Research(this.futuro.store).compareEvaluations(input.leftId, input.rightId);
   }
 }
 

@@ -1,5 +1,14 @@
 # Initial implementation validation
 
+## Schema version 2 validation
+
+- 14 TypeScript tests and 4 Python tests passed after adding research storage and diagnostics.
+- The migration was applied to the existing local database with an automatic SQLite backup: 380 fixtures/result observations, 760 team-goal observations, 380 preserved prediction runs, 1,980 candidates and 1,980 settlements.
+- `PRAGMA foreign_key_check` reported no violations.
+- New tests cover known variance/calibration formulas, preserved v1 JSON records and backup, exact new feature lineage, immutable evaluations after score corrections, matched model comparisons, chronological split validation, sourced match statistics, and individual prediction-source accuracy.
+- Existing feature-input lineage remains unknown (zero backfilled links), as expected: the initial predictions did not capture revision IDs. New snapshots populate these links.
+- New model responses include an artifact hash and configuration; historical models remain flagged as legacy/unverified. An automated trainer is not part of this validation.
+
 Validated 2026-11-03 on Windows with Node 22.13.1 and Python 3.13.5.
 
 - TypeScript check: passed (`npm run build`, currently `tsc --noEmit`).

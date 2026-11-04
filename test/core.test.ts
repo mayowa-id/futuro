@@ -131,5 +131,11 @@ test('local API validates input and exposes persisted research results', async (
     assert.equal(invalid.status, 400);
     assert.equal((await fetch(`${url}/fixtures/missing`)).status, 404);
     assert.equal((await (await fetch(`${url}/performance`)).json()).mode, 'live');
+    const analytics = await (await fetch(`${url}/analytics?mode=historical`)).json();
+    assert.equal(analytics.metricVersion, 'research-metrics-v1');
+    assert.equal(analytics.residualSampleVariance, null);
+    assert.deepEqual(await (await fetch(`${url}/models`)).json(), []);
+    const invalidDataset = await fetch(`${url}/datasets`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    assert.equal(invalidDataset.status, 400);
   } finally { await app.close(); store.close(); }
 });

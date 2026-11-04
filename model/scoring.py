@@ -1,7 +1,13 @@
 """Dependency-free, transparent Poisson baseline. No claimed calibration or edge."""
 import math
+import hashlib
+from pathlib import Path
 
 VERSION = 'poisson-form-v1'
+SPECIFICATION = dict(family='independent_poisson', shrinkageMatches=5,
+                     recentWindow=6, venueWindow=10, recentVenueWeights=[0.5, 0.5],
+                     rateBounds=[0.15, 6], maximumGoals=40, featureVersion='form-v1')
+ARTIFACT_HASH = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
 def poisson(rate, count):
@@ -38,6 +44,8 @@ def score(features):
                 if win:
                     markets[key] += p
     return {'modelVersion': VERSION, 'rates': rates,
+            'artifactHash': ARTIFACT_HASH,
+            'specification': SPECIFICATION,
             'probabilities': {key: value / mass for key, value in markets.items()},
             'calibrated': False,
             'limitations': ['Independent Poisson assumption', 'Short samples shrink toward league means',

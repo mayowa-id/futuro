@@ -33,5 +33,6 @@ export function buildFeatures(store: Store, target: Fixture, cutoff: string, mod
     competition: target.competition, leagueMatches: matches.length,
     leagueHomeGoals: matches.length ? matches.reduce((s, f) => s + f.score![0], 0) / matches.length : 0,
     leagueAwayGoals: matches.length ? matches.reduce((s, f) => s + f.score![1], 0) / matches.length : 0,
-    leagueFixtureIds: matches.map(f => f.id), home: team(target.homeKey, true), away: team(target.awayKey, false) };
+    leagueFixtureIds: matches.map(f => f.id), inputRevisionIds: matches.map(f => store.revisionId(f)),
+    home: team(target.homeKey, true), away: team(target.awayKey, false) };
 }
