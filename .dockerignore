@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+node_modules
+data
+dist
+coverage
+.venv
+venv
+**/__pycache__
+**/*.pyc
+**/*.sqlite*
+*.log
+.agents
+.codex
+.aws

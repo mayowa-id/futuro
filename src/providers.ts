@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { competitionSchema, Fixture, fixtureId, fixtureSchema, scoreSchema, teamKey } from './domain';
 import { Store } from './store';
-import { RetryableError, retryAfter } from './errors';
+import { RetryableError, retryAfter, quotaResetAt } from './errors';
 
 export const openLeagues = { PL: 'en.1', PD: 'es.1', BL1: 'de.1', SA: 'it.1', FL1: 'fr.1', PPL: 'pt.1' } as const;
 export const seasonSchema = z.string().regex(/^20\d{2}-\d{2}$/).refine(s => Number(s.slice(5)) === (Number(s.slice(0, 4)) + 1) % 100, 'Season must be consecutive, e.g. 2024-25');
@@ -65,10 +65,14 @@ export class Providers {
       const code = cause && /^[A-Z_0-9]+$/.test(cause) ? ` (${cause})` : '';
       throw new RetryableError(`${provider} request failed${code}. Check connectivity and retry; no automatic paid fallback.`, true);
     }
+    const responseAt = (this.options.now?.() ?? new Date()).getTime();
+    const quotaReset = provider === 'football-data' ? quotaResetAt(response.headers, responseAt) : undefined;
+    if (quotaReset) this.store.setProviderCooldown(provider, quotaReset);
     if (!response.ok) {
-      const now = (this.options.now?.() ?? new Date()).getTime();
-      const retryAt = retryAfter(response.headers.get('Retry-After'), now) ??
-        (response.status === 429 ? new Date(now + 60_000).toISOString() : undefined);
+      const retryHeader = retryAfter(response.headers.get('Retry-After'), responseAt);
+      const deadlines = [retryHeader, quotaReset].filter((v): v is string => v !== undefined).sort();
+      const retryAt = deadlines.at(-1) ??
+        (response.status === 429 ? new Date(responseAt + 60_000).toISOString() : undefined);
       if (retryAt && (response.status === 429 || response.status === 503)) this.store.setProviderCooldown(provider, retryAt);
       throw new RetryableError(`${provider} returned HTTP ${response.status}. Check free entitlement or retry later.`,
         response.status === 429 || response.status >= 500, retryAt);

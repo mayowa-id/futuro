@@ -5,7 +5,10 @@
   "description": "Free-data football prediction research and tracking backend",
   "scripts": {
     "dev": "tsx src/main.ts",
-    "build": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/main.js",
+    "smoke:production": "node scripts/smoke-production.mjs",
     "test": "tsx --test test/*.test.ts",
     "demo": "tsx scripts/demo.ts",
     "import:openfootball": "tsx scripts/import.ts",

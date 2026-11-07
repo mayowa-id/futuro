@@ -20,7 +20,7 @@ In a second terminal in this directory:
 npm run dev
 ```
 
-The API listens at `http://127.0.0.1:3000`; the Python scoring service listens at `http://127.0.0.1:8001`. Set `MODEL_PORT` for Python and the corresponding `MODEL_URL` in `.env` to change the scoring address. Both services bind locally; the API intentionally refuses a public host because authentication is not implemented.
+The API listens at `http://127.0.0.1:3000`; the Python scoring service listens at `http://127.0.0.1:8001`. Set `MODEL_PORT` for Python and the corresponding `MODEL_URL` in `.env` to change the scoring address. Localhost development can run without an access token. Production/public binding requires a separate `API_ACCESS_TOKEN`; protected routes then require `Authorization: Bearer YOUR_API_ACCESS_TOKEN`. See [Render deployment](RENDER_DEPLOYMENT.md) for the Docker setup and required secrets.
 
 If Node/Python are not on Windows PATH, use their installed executable paths or add their installation directories to your terminal's PATH. Run commands from the repository root so aliases and `.env` resolve correctly.
 
@@ -144,6 +144,7 @@ Live features use captured fixture revisions available by cutoff. Historical exp
 
 ```powershell
 npm run build
+npm run typecheck
 npm test
 python -m unittest discover -s model -p 'test_*.py' -v
 ```
@@ -158,7 +159,9 @@ The research schema includes normalized football/results/statistics records, exa
 
 Schema version 4 adds persistent scheduled workflow tasks, retry/cooldown state, atomic automatic-prediction deduplication, saved live analytics reports, and save-time kickoff checks. Set the free token and `AUTOMATION_ENABLED=true`, then keep the local services running. No API token is included in the repository.
 
-Deferred: frontend, PostgreSQL adapter, Redis/BullMQ workers, automated article/injury/odds ingestion, richer trained features and probability calibration, corner models, secondary-league adapters, bookmaker-specific void handling, and public authentication. SQLite and Python's standard HTTP server keep this local milestone dependency-light; the documented PostgreSQL/FastAPI/queue direction can be introduced as usage requires it.
+Docker packaging now starts the compiled API and private Python scorer together, with readiness checks and bearer-token access control. Render Free remains a disposable preview; persistent cloud storage and reliable hosted scheduling remain separate work.
+
+Deferred: frontend, PostgreSQL adapter, Redis/BullMQ workers, automated article/injury/odds ingestion, richer trained features and probability calibration, corner models, secondary-league adapters, bookmaker-specific void handling, and multi-user authentication/roles. SQLite and Python's standard HTTP server keep this local milestone dependency-light; the documented PostgreSQL/FastAPI/queue direction can be introduced as usage requires it.
 
 Less-obvious market hypotheses and published evidence are tracked in [NICHE_MARKET_RESEARCH.md](NICHE_MARKET_RESEARCH.md). They are not silently enabled as proven profitable selections.
 

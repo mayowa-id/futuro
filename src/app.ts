@@ -11,6 +11,7 @@ import { Research } from './research';
 import { marketSchema } from './domain';
 import { Training } from './training';
 import { Automation } from './automation';
+import { AccessGuard } from './access';
 
 @Catch()
 class ApiErrors implements ExceptionFilter {
@@ -28,6 +29,14 @@ class ApiController {
   constructor(@Inject('FUTURO') private readonly futuro: Futuro, @Inject('PROVIDERS') private readonly providers: Providers,
     @Inject('TRAINING') private readonly training: Training, @Inject('AUTOMATION') private readonly automation: Automation) {}
   @Get('health') health() { return { status: 'ok', name: 'Futuro', dataBudget: 0 }; }
+  @Get('health/ready') async ready() {
+    this.futuro.store.db.prepare('SELECT 1').get();
+    try {
+      const response = await fetch(`${process.env.MODEL_URL ?? 'http://127.0.0.1:8001'}/health`, { signal: AbortSignal.timeout(2000) });
+      if (!response.ok) throw new Error('Model not ready');
+    } catch { throw new HttpException('Scoring service is not ready', 503); }
+    return { status: 'ready' };
+  }
   @Get('capabilities') capabilities() {
     return { storage: 'sqlite-local', model: 'uncalibrated-poisson-baseline',
       currentData: { provider: 'football-data.org', configured: Boolean(process.env.FOOTBALL_DATA_TOKEN), delayed: true },
@@ -102,7 +111,7 @@ class ApiController {
 }
 
 export async function createApp(store: Store, futuro = new Futuro(store), training = new Training(store),
-  automation = new Automation(store, futuro, new Providers(store), training)) {
+  automation = new Automation(store, futuro, new Providers(store), training), security: { apiAccessToken?: string } = {}) {
   @Module({ controllers: [ApiController], providers: [
     { provide: 'FUTURO', useValue: futuro }, { provide: 'PROVIDERS', useValue: new Providers(store) }, { provide: 'TRAINING', useValue: training },
     { provide: 'AUTOMATION', useValue: automation },
@@ -110,6 +119,7 @@ export async function createApp(store: Store, futuro = new Futuro(store), traini
   class AppModule {}
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn'], bodyParser: true });
   app.useGlobalFilters(new ApiErrors());
+  app.useGlobalGuards(new AccessGuard(security.apiAccessToken));
   app.enableShutdownHooks();
   return app;
 }

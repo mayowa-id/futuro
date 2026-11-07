@@ -1,5 +1,13 @@
 # Initial implementation validation
 
+## Deployment packaging validation (2026-11-07)
+
+- Production TypeScript compilation and full type check passed. `npm run build` now emits `dist`; `npm run typecheck` retains the source/test type check.
+- 34 TypeScript tests and 9 Python tests passed, including bearer authentication, protected writes, public readiness and startup supervision cases.
+- `npm run smoke:production` passed using the compiled Node entry point, the real local Python scorer, a temporary SQLite database and a generated test access token. It made no external provider requests.
+- Docker is unavailable on this machine; the Docker image was not built or deployed here. The root Dockerfile, context exclusions, supervisor and Render settings are prepared for Render to build after the files are committed/pushed.
+- No real credentials, local databases or model artifacts are included in the Docker build context. The container defaults to automation disabled for a disposable Free preview.
+
 ## Scheduled workflow validation (2026-11-07)
 
 - 28 TypeScript tests passed, including 11 new scheduler/provider cases, and the TypeScript check passed.
