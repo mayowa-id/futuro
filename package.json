@@ -14,6 +14,8 @@
     "import:openfootball": "tsx scripts/import.ts",
     "backtest": "tsx scripts/backtest.ts",
     "db:inspect": "tsx scripts/inspect-db.ts",
+    "db:migrate": "node dist/postgres/cli.js migrate",
+    "db:status": "node dist/postgres/cli.js status",
     "train": "tsx scripts/train.ts",
     "automation:once": "tsx scripts/automation.ts"
   },
@@ -22,14 +24,18 @@
     "@nestjs/core": "^11.1.0",
     "@nestjs/platform-express": "^11.1.0",
     "dotenv": "^16.5.0",
+    "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },
-  "engines": { "node": ">=22.13.0" }
+  "engines": {
+    "node": ">=22.13.0"
+  }
 }

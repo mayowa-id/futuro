@@ -24,6 +24,8 @@ Add `API_ACCESS_TOKEN` in Render's Environment settings. Generate a separate ran
 
 Add `FOOTBALL_DATA_TOKEN` separately if you want to test fetching football data. The image does not contain either secret. Use Render Environment settings rather than committed `.env` files or Docker build arguments.
 
+Optional `DATABASE_URL` now connects to Neon and creates the PostgreSQL schema at startup. A connection or migration failure prevents startup. This is **schema setup only**: application reads/writes still use SQLite. Verify the fresh connection through the authenticated `/database/status` endpoint; a successful deployment of an older commit that ignored the variable did not verify Neon. See [POSTGRES.md](POSTGRES.md) for the expected log/status output and the remaining storage adapter work.
+
 The Docker image already provides these defaults, so existing equivalent values can remain:
 
 ```dotenv
@@ -65,7 +67,7 @@ For local development, localhost without `API_ACCESS_TOKEN` remains available. P
 
 Render Free sleeps on inactivity and does not provide a persistent disk. Its filesystem, including this SQLite database and model files, is disposable across restarts/redeploys. Keep `AUTOMATION_ENABLED=false` on this preview. Do not upload the local research database expecting Render Free to retain it.
 
-For a durable free deployment, the application needs a separately designed persistent database/artifact backend and external scheduling. This packaging does not change the $0 budget or select a paid disk. Continue collecting valuable history locally until persistence is implemented for the chosen host.
+For a durable free deployment, the application still needs PostgreSQL repositories, model-file recovery from stored artifacts, and external scheduling. The Neon schema is prepared, but it does not yet receive application writes. This packaging does not change the $0 budget or select a paid disk. Continue collecting valuable history locally until persistence is implemented for the chosen host.
 
 Official references: [Docker settings](https://render.com/docs/docker), [port binding](https://render.com/docs/web-services#port-binding), [Free limitations](https://render.com/docs/free).
 

@@ -4,6 +4,8 @@ A local, free-data football prediction research API. It imports historical resul
 
 The current model is an **uncalibrated baseline**, not a proven profitable selection system. All scored candidates are labeled `research_only`; passing preference filters is not a confidence guarantee.
 
+Neon schema setup is available: setting `DATABASE_URL` verifies the connection and creates the PostgreSQL tables at startup. **Application storage remains SQLite until the PostgreSQL read/write adapter is implemented.** See [POSTGRES.md](POSTGRES.md) for setup and the authenticated database status check.
+
 ## Run locally
 
 Requires Node.js 22.13+ and Python 3.11+. SQLite is included in Node; no Python packages, database server, paid data plan, or paid AI API are required. Node 22 may print an experimental SQLite warning.

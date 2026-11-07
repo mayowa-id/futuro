@@ -29,7 +29,7 @@ while (modelPort === apiPort) modelPort = await port();
 const token = randomBytes(32).toString('hex');
 const environment = { ...process.env, NODE_ENV: 'production', HOST: '127.0.0.1', PORT: String(apiPort),
   MODEL_PORT: String(modelPort), MODEL_URL: `http://127.0.0.1:${modelPort}`, API_ACCESS_TOKEN: token,
-  DATABASE_PATH: join(directory, 'smoke.sqlite'), ARTIFACT_DIRECTORY: join(directory, 'artifacts'),
+  DATABASE_PATH: join(directory, 'smoke.sqlite'), DATABASE_URL: '', ARTIFACT_DIRECTORY: join(directory, 'artifacts'),
   FOOTBALL_DATA_TOKEN: '', AUTOMATION_ENABLED: 'false' };
 let model, api, logs = '';
 const launch = (exe, args) => {

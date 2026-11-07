@@ -12,6 +12,7 @@ import { marketSchema } from './domain';
 import { Training } from './training';
 import { Automation } from './automation';
 import { AccessGuard } from './access';
+import { PostgresSchema, postgresVersion } from './postgres/database';
 
 @Catch()
 class ApiErrors implements ExceptionFilter {
@@ -27,7 +28,8 @@ class ApiErrors implements ExceptionFilter {
 @Controller()
 class ApiController {
   constructor(@Inject('FUTURO') private readonly futuro: Futuro, @Inject('PROVIDERS') private readonly providers: Providers,
-    @Inject('TRAINING') private readonly training: Training, @Inject('AUTOMATION') private readonly automation: Automation) {}
+    @Inject('TRAINING') private readonly training: Training, @Inject('AUTOMATION') private readonly automation: Automation,
+    @Inject('POSTGRES_SCHEMA') private readonly postgres: PostgresSchema | null) {}
   @Get('health') health() { return { status: 'ok', name: 'Futuro', dataBudget: 0 }; }
   @Get('health/ready') async ready() {
     this.futuro.store.db.prepare('SELECT 1').get();
@@ -39,10 +41,16 @@ class ApiController {
   }
   @Get('capabilities') capabilities() {
     return { storage: 'sqlite-local', model: 'uncalibrated-poisson-baseline',
+      postgresSchema: { configured: Boolean(this.postgres), expectedVersion: postgresVersion, applicationStorageMigrated: false },
       currentData: { provider: 'football-data.org', configured: Boolean(process.env.FOOTBALL_DATA_TOKEN), delayed: true },
       history: { provider: 'openfootball', apiKeyRequired: false },
       corners: 'unavailable', injuries: 'manual', odds: 'manual', externalPredictions: 'manual',
       automaticBets: false, scheduledSync: this.automation.config.enabled, training: 'local asynchronous Python jobs; validation-only selection' };
+  }
+  @Get('database/status') async databaseStatus() {
+    if (!this.postgres) return { configured: false, applicationStorage: 'sqlite-local' };
+    try { return await this.postgres.status(); }
+    catch { throw new HttpException('PostgreSQL schema check failed', 503); }
   }
   @Get('fixtures') fixtures(@Query() query: unknown) {
     const q = z.object({ competition: competitionSchema.optional(), status: z.string().optional() }).parse(query);
@@ -111,10 +119,12 @@ class ApiController {
 }
 
 export async function createApp(store: Store, futuro = new Futuro(store), training = new Training(store),
-  automation = new Automation(store, futuro, new Providers(store), training), security: { apiAccessToken?: string } = {}) {
+  automation = new Automation(store, futuro, new Providers(store), training),
+  security: { apiAccessToken?: string; postgres?: PostgresSchema } = {}) {
   @Module({ controllers: [ApiController], providers: [
     { provide: 'FUTURO', useValue: futuro }, { provide: 'PROVIDERS', useValue: new Providers(store) }, { provide: 'TRAINING', useValue: training },
     { provide: 'AUTOMATION', useValue: automation },
+    { provide: 'POSTGRES_SCHEMA', useValue: security.postgres ?? null },
   ] })
   class AppModule {}
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn'], bodyParser: true });
