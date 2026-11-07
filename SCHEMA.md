@@ -1,6 +1,6 @@
 # Futuro database and learning design
 
-Schema version 2. The database keeps football observations, prediction decisions, and experiment results as separate histories. A later correction adds a record rather than rewriting the evidence behind an earlier forecast.
+Current schema version: 3. The version 2 relationships below remain intact; version 3 adds the working trainer's artifact/example/report records, described in TRAINING.md. The database keeps football observations, prediction decisions, and experiment results as separate histories. A later correction adds a record rather than rewriting the evidence behind an earlier forecast.
 
 The implementation is local SQLite with foreign keys, indexes, integrity checks, and transactional migration/backfill. The relational structure is suitable for a later PostgreSQL adapter; no paid database service is required.
 
@@ -54,7 +54,8 @@ erDiagram
 | Forecast decisions | `prediction_runs`, `prediction_evidence`, `market_candidates` | Probability for each market, quote linkage, preference pass/fail reasons, source support, abstentions and evidence actually available at cutoff |
 | Outcomes | `candidate_settlements` | Outcome, specific result revision, rule version and hypothetical stake/profit when a verified quote exists |
 | Reusable experiments | `datasets`, `dataset_members` | Frozen fixture membership, result revisions and chronological train/validation/test splits |
-| Training provenance | `training_runs` | Reserved for actual trainer jobs: dataset, configuration/code hash, lifecycle and output artifact |
+| Training provenance | `training_runs`, `training_examples`, `training_events` | Actual local trainer jobs, exact eligible/blocked snapshots, configuration/code hash and lifecycle |
+| Trained artifacts | `model_artifacts`, `training_reports`, `training_evaluations` | Immutable artifact JSON/digest/file reference, validation trials, and linked baseline/challenger test comparison |
 | Frozen evaluation | `evaluation_runs`, `evaluation_predictions`, `evaluation_items` | Stored metric version/results and exact predictions/settlements used in a comparison |
 
 Existing `fixtures`, `evidence`, `predictions` and `settlements` JSON records remain intact for compatibility and audit. Their relational projections are written in the same transaction. A projection failure rolls back the original write too. They are not separately editable competing sources of truth.
@@ -108,9 +109,9 @@ Variance is not a calibrated confidence interval. Repeated markets on one game a
 6. Freeze evaluations for baseline and challenger on the same test dataset. Compare matched fixture/market pairs and monitor chronological/monthly behavior.
 7. Promote changes only after evidence supports an improvement; continue prospective monitoring. Keep the previous version and experiment records.
 
-The schema and evaluation API support this loop. Automatic training, hyperparameter search, significance testing, promotion and retraining schedules are **not implemented** yet. The present Python model is a fixed-form baseline that derives rates from prior matches. Adding data alone does not train a new model or demonstrate improvement.
+The local trainer now performs bounded goal-rate fitting and a nine-configuration validation search, followed by a held-out baseline comparison. Significance testing, automatic promotion and retraining schedules remain future work. The fixed-form baseline stays available. Adding data alone does not run the trainer or demonstrate improvement. See TRAINING.md.
 
-All markets for a fixture belong to one dataset split. Dataset validation rejects duplicates across splits and requires training to complete before validation starts, and validation before test. This guards chronological partitioning; a future trainer must additionally enforce feature provenance and avoid using test data during tuning. Repeated experimentation against one test set eventually requires another untouched holdout.
+All markets for a fixture belong to one dataset split. Dataset validation rejects duplicates across splits and requires training to complete before validation starts, and validation before test. The trainer freezes feature lineage, verifies target revisions, and excludes test labels from tuning. Repeated experimentation against one test set eventually requires another untouched holdout.
 
 ## API and example
 
@@ -165,7 +166,7 @@ Corners can be stored now; a corner forecasting model still requires enough reli
 
 ## Migration and operations
 
-`Store` applies version 2 automatically on first open. Existing databases with fixture history get a SQLite-consistent backup beside the database named `*.pre-v2-TIMESTAMP.sqlite`, before the migration transaction. All new projections and backfills commit together; a failed migration rolls back. Original JSON histories stay intact.
+`Store` applies migrations automatically on first open, through current version 3. Existing populated databases get a SQLite-consistent backup beside the database named `*.pre-vN-TIMESTAMP.sqlite`, before each migration transaction. All projections/backfills for a migration commit together; a failed migration rolls back. Original JSON histories stay intact.
 
 ```powershell
 npm run db:inspect

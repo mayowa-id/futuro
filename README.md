@@ -140,7 +140,7 @@ The default mode for reporting is `live`. A corrected result appends settlement 
 
 The Python service builds a joint score distribution from independent Poisson goal counts. Rates combine recent-six scoring/conceding with home/away venue attacks and defences at fixed equal weights, with five-match-equivalent shrinkage to prior league means. Features include last-five and last-six form, ten recent venue fixtures, and a 400-day league history. At least 20 league results and five results per team are required to score. Weights are not tuned; injuries, standings and context are not fitted adjustments yet.
 
-Live features use captured fixture revisions available by cutoff. Historical experiments reconstruct prior form from the current stored result history, using a conservative next-day bound for date-only results and four-hour bound for timed matches. These are reconstruction assumptions, not proof of historical information availability. Model training/tuning, robust calibration studies, and confidence intervals remain future work.
+Live features use captured fixture revisions available by cutoff. Historical experiments reconstruct prior form from the current stored result history, using a conservative next-day bound for date-only results and four-hour bound for timed matches. These are reconstruction assumptions, not proof of historical information availability. The local trainer fits bounded goal-rate corrections and selects weights on validation data; robust calibration studies and confidence intervals remain future work. See [TRAINING.md](TRAINING.md) for commands and the held-out protocol.
 
 ```powershell
 npm run build
@@ -154,8 +154,10 @@ Tests cover provider parsing, regulation-time scores, idempotency, cutoff leakag
 
 Implemented: local NestJS API, standard-library Python scoring service, SQLite persistence/revision schema, two free-data adapters, manual evidence, historical replay, analytical settlement, and performance reporting.
 
-Schema version 2 adds normalized football/results/statistics records, exact new feature-input lineage, model artifact/configuration registration, calibration and variance diagnostics, frozen chronological datasets, and immutable evaluation comparisons. Completed match corner/shot/xG observations can be recorded manually; they are not automatically used by the goal model. Training-job tables are present, but an automatic trainer is still pending.
+The research schema includes normalized football/results/statistics records, exact new feature-input lineage, model artifact/configuration registration, calibration and variance diagnostics, frozen chronological datasets, and immutable evaluation comparisons. Schema version 3 adds a working asynchronous trainer, immutable artifacts, frozen training examples and experiment lifecycle reports. Completed match corner/shot/xG observations can be recorded manually; they are not automatically used by the goal model.
 
-Deferred: frontend, PostgreSQL adapter, Redis/BullMQ workers, automated article/injury/odds ingestion, model calibration/tuning, corner models, secondary-league adapters, bookmaker-specific void handling, and public authentication. SQLite and Python's standard HTTP server keep this local milestone dependency-light; the documented PostgreSQL/FastAPI/queue direction can be introduced as usage requires it.
+Deferred: frontend, PostgreSQL adapter, Redis/BullMQ workers, automated article/injury/odds ingestion, richer trained features and probability calibration, corner models, secondary-league adapters, bookmaker-specific void handling, and public authentication. SQLite and Python's standard HTTP server keep this local milestone dependency-light; the documented PostgreSQL/FastAPI/queue direction can be introduced as usage requires it.
+
+Less-obvious market hypotheses and published evidence are tracked in [NICHE_MARKET_RESEARCH.md](NICHE_MARKET_RESEARCH.md). They are not silently enabled as proven profitable selections.
 
 See [free data plan](FREE_DATA_PLAN.md), [requirements](REQUIREMENTS.md), and [implementation plan](IMPLEMENTATION_PLAN.md). No paid services are required by the current implementation.

@@ -61,10 +61,10 @@ export class Research {
   dataset(id: string) {
     const dataset = this.store.db.prepare('SELECT * FROM datasets WHERE id=?').get(id);
     if (!dataset) throw new Error('Dataset not found');
-    return { ...dataset, id: String(dataset.id), mode: String(dataset.mode),
+    return { ...dataset, id: String(dataset.id), mode: String(dataset.mode), fingerprint: String(dataset.fingerprint),
       members: this.store.db.prepare('SELECT * FROM dataset_members WHERE dataset_id=? ORDER BY kickoff,fixture_id').all(id) };
   }
-  createEvaluation(input: unknown) {
+  createEvaluation(input: unknown, expectedPredictionIds?: string[]) {
     const parsed = z.object({ name: z.string().min(1).max(200), datasetId: z.string(), modelId: z.string() }).parse(input);
     const dataset = this.dataset(parsed.datasetId);
     if (!this.store.db.prepare('SELECT id FROM model_versions WHERE id=?').get(parsed.modelId)) throw new Error('Model version not found');
@@ -76,6 +76,11 @@ export class Research {
     }
     // Freeze exactly the recorded predictions/result revisions; later corrections require another evaluation.
     const rows = new Analytics(this.store).rows({ mode: dataset.mode as 'demo' | 'historical', modelId: parsed.modelId }).filter(r => tests.has(r.fixtureId));
+    if (expectedPredictionIds) {
+      const expected = new Set(expectedPredictionIds), actual = new Set(rows.map(r => r.predictionId));
+      if (expected.size !== actual.size || [...actual].some(id => !expected.has(id)))
+        throw new Error('Prediction history changed during training evaluation; retry on a new run');
+    }
     for (const r of rows) {
       const member = tests.get(r.fixtureId)!;
       if (r.resultRevisionId !== Number(member.result_revision_id)) throw new Error('A test result changed since dataset freeze; create a new dataset revision');

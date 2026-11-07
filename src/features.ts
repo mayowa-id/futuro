@@ -36,3 +36,11 @@ export function buildFeatures(store: Store, target: Fixture, cutoff: string, mod
     leagueFixtureIds: matches.map(f => f.id), inputRevisionIds: matches.map(f => store.revisionId(f)),
     home: team(target.homeKey, true), away: team(target.awayKey, false) };
 }
+
+export function featureBlockers(target: Fixture, features: ReturnType<typeof buildFeatures>): string[] {
+  const blockers: string[] = [];
+  if (features.leagueMatches < 20) blockers.push('Fewer than 20 completed league matches in the available history');
+  if (features.home.last5.played < 5 || features.away.last5.played < 5) blockers.push('Fewer than five completed matches for at least one team');
+  if (target.status === 'cancelled' || target.status === 'postponed') blockers.push('Fixture is cancelled or postponed');
+  return blockers;
+}

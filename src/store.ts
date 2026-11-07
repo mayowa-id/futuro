@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { Evidence, Fixture, hash, Mode } from './domain';
-import { protectHistory, schemaV2 } from './schema';
+import { protectHistory, protectTrainingHistory, schemaV2, schemaV3 } from './schema';
 import { projectEvidence, projectFixture, projectPrediction, projectSettlement, seedMarkets } from './projections';
 
 export class Store {
@@ -37,6 +37,15 @@ export class Store {
       for (const s of this.db.prepare('SELECT id,payload FROM settlements ORDER BY rowid').all()) projectSettlement(this.db, String(s.id), JSON.parse(String(s.payload)), null);
       protectHistory(this.db);
       this.db.prepare('INSERT INTO schema_version VALUES (2)').run();
+      }); } catch (error) { this.db.close(); throw error; }
+    }
+    if (version < 3) {
+      if (path !== ':memory:' && Number(this.db.prepare('SELECT COUNT(*) AS n FROM fixture_revisions').get()?.n) > 0)
+        this.db.prepare('VACUUM INTO ?').run(`${path}.pre-v3-${Date.now()}.sqlite`);
+      try { this.atomic(() => {
+        this.db.exec(schemaV3);
+        protectTrainingHistory(this.db);
+        this.db.prepare('INSERT INTO schema_version VALUES (3)').run();
       }); } catch (error) { this.db.close(); throw error; }
     }
   }
