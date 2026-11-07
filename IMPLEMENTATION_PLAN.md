@@ -4,7 +4,9 @@ Status: initial local backend and research schema implemented; live coverage and
 
 Implementation update: the initial local backend now uses NestJS, embedded SQLite, and a dependency-free Python HTTP scoring service. This keeps the first version runnable without PostgreSQL/Redis or Python package installation. PostgreSQL, FastAPI, queue workers, and the frontend remain later milestones. README.md documents the implemented endpoints, manual workflows, testing, and limitations; live data coverage/model calibration are still unverified.
 
-Research update: schema version 2 preserves normalized fixtures/results/statistics, immutable prediction/model/feature histories, frozen chronological datasets and evaluations, and expanded calibration/variance diagnostics. See SCHEMA.md. Training provenance tables exist; automatic model training and promotion remain future work.
+Research update: schema version 2 introduced normalized fixtures/results/statistics, immutable prediction/model/feature histories, frozen chronological datasets and evaluations, and expanded calibration/variance diagnostics. See SCHEMA.md. Version 3 builds the working trainer on those records, as described below.
+
+Training update: schema version 3 and the local trainer now implement fitted goal-rate corrections, validation-only parameter search, immutable artifacts and a held-out baseline/challenger comparison. See TRAINING.md. Automatic promotion, scheduled retraining and richer trained features remain future work. NICHE_MARKET_RESEARCH.md records less-obvious market hypotheses and the evidence required before extending the scoring contract.
 
 ## First vertical slice
 

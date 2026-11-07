@@ -1,5 +1,14 @@
 # Initial implementation validation
 
+## Training pipeline validation (2026-11-06)
+
+- 17 TypeScript tests and 7 Python tests passed; TypeScript type check passed.
+- The integration test invokes the real Python worker, freezes inputs, verifies fitting receives no test labels, persists/reloads the artifact, compares 20 held-out fixtures, and rejects tampered files and terminal-job edits.
+- Failure tests retain worker errors and release the local job lock; changed frozen results are rejected before fitting.
+- Real local run `c06611fa-ed6c-469d-90ee-8d62319b2feb` completed on the imported Premier League season, with 179 eligible training, 75 validation and 76 test fixtures. The chosen artifact was written before test scoring; 456 matched test candidates were settled for each model.
+- Baseline test Brier: 0.2167052183. Challenger: 0.2170965562 (slightly worse). The challenger was retained as a research artifact with no automatic promotion. No price/profit claim is made.
+- Migration to schema version 3 backs up a populated database before adding training artifacts/examples/reports and lifecycle integrity rules.
+
 ## Schema version 2 validation
 
 - 14 TypeScript tests and 4 Python tests passed after adding research storage and diagnostics.

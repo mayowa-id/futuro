@@ -53,6 +53,8 @@ These three markets express preferences, not an exclusive selection list. Consid
 
 ## Additional statistically supported markets
 
+Research less-obvious markets with explicit evidence labels. Published market-structure findings, high event frequencies, and current profitable pricing are separate claims. See NICHE_MARKET_RESEARCH.md for the evidence-ranked shortlist and test protocol. Do not label a market profitable merely because it is uncommon or historically frequent.
+
 - Include corner markets, such as match or team corner totals, where the required data and bookmaker markets are available.
 - Use corner-specific evidence: corners won and conceded, home/away splits, opponent strength, recent and longer-term distributions, and relevant tactical context. A goal prediction alone does not establish a corner prediction.
 - Other markets may qualify when supported by suitable historical data, explicit market definitions, a market-appropriate probability model, and chronological evaluation.

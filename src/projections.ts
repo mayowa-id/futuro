@@ -52,17 +52,22 @@ export function modelIdentity(model: any): string {
   return hash([model.modelVersion, model.artifactHash ?? null, model.specification ?? { legacy: true }]);
 }
 
+export function projectFeatures(db: DatabaseSync, fixtureId: string, features: any, cutoff: string): string {
+  const snapshotId = hash([fixtureId, features]);
+  db.prepare('INSERT OR IGNORE INTO feature_snapshots VALUES (?,?,?,?,?,?,?,?)').run(snapshotId, fixtureId, cutoff,
+    features.featureVersion, Number(features.reconstruction), features.home.last5.wins, features.away.last5.wins, JSON.stringify(features));
+  for (const revision of features.inputRevisionIds ?? [])
+    db.prepare('INSERT OR IGNORE INTO feature_inputs VALUES (?,?)').run(snapshotId, revision);
+  return snapshotId;
+}
+
 export function projectPrediction(db: DatabaseSync, p: any) {
   const modelId = p.model ? modelIdentity(p.model) : null;
   if (modelId) db.prepare('INSERT OR IGNORE INTO model_versions VALUES (?,?,?,?,?,?)').run(modelId, p.model.modelVersion,
     p.model.artifactHash ?? null, p.model.artifactHash ? 'artifact_reported' : 'legacy_unverified',
     JSON.stringify(p.model.specification ?? { legacy: true, note: 'Configuration/code digest not captured by the original prediction' }), p.createdAt);
-  const snapshotId = hash([p.fixtureId, p.features]);
-  db.prepare('INSERT OR IGNORE INTO feature_snapshots VALUES (?,?,?,?,?,?,?,?)').run(snapshotId, p.fixtureId, p.cutoff,
-    p.features.featureVersion, Number(p.features.reconstruction), p.features.home.last5.wins, p.features.away.last5.wins, JSON.stringify(p.features));
   // Older predictions have no exact input revisions; never invent lineage during backfill.
-  for (const revision of p.features.inputRevisionIds ?? [])
-    db.prepare('INSERT OR IGNORE INTO feature_inputs VALUES (?,?)').run(snapshotId, revision);
+  const snapshotId = projectFeatures(db, p.fixtureId, p.features, p.cutoff);
   db.prepare('INSERT OR IGNORE INTO prediction_runs VALUES (?,?,?,?,?,?,?,?,?,?)').run(p.id, p.fixtureId, modelId, snapshotId, p.mode,
     p.createdAt, p.cutoff, Number(p.evidence.some((e: Evidence) => e.kind === 'injury')), Number(p.blockers.length > 0), JSON.stringify(p.blockers));
   for (const e of p.evidence) {

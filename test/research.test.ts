@@ -72,7 +72,7 @@ test('schema v1 migrates without losing original predictions/results and creates
     assert.ok(readdirSync(directory).some(name => name.includes('.pre-v2-')));
     assert.throws(() => store!.db.prepare('UPDATE market_candidates SET probability=.1').run(), /append-only/);
     store.close(); store = new Store(path);
-    assert.equal(store.db.prepare('SELECT MAX(version) AS v FROM schema_version').get()?.v, 2);
+    assert.equal(store.db.prepare('SELECT MAX(version) AS v FROM schema_version').get()?.v, 3);
     assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM market_candidates').get()?.n, 1);
   } finally {
     store?.close();

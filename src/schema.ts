@@ -165,3 +165,44 @@ export function protectHistory(db: DatabaseSync) {
       BEFORE ${operation} ON ${table} BEGIN SELECT RAISE(ABORT, 'Historical records are append-only'); END;`);
   }
 }
+
+export const schemaV3 = `
+ALTER TABLE training_runs ADD COLUMN failure_reason TEXT;
+ALTER TABLE training_runs ADD COLUMN owner_pid INTEGER;
+CREATE UNIQUE INDEX one_active_training_run ON training_runs(status) WHERE status='running';
+CREATE TABLE training_examples (
+  run_id TEXT NOT NULL REFERENCES training_runs(id), fixture_id TEXT NOT NULL REFERENCES fixture_catalog(id),
+  result_revision_id INTEGER NOT NULL REFERENCES match_results(revision_id), snapshot_id TEXT NOT NULL REFERENCES feature_snapshots(id),
+  split TEXT NOT NULL CHECK(split IN ('train','validation','test')), eligible INTEGER NOT NULL CHECK(eligible IN (0,1)),
+  blockers TEXT NOT NULL CHECK(json_valid(blockers)), PRIMARY KEY(run_id,fixture_id)
+);
+CREATE TABLE model_artifacts (
+  model_id TEXT PRIMARY KEY REFERENCES model_versions(id), training_run_id TEXT NOT NULL UNIQUE REFERENCES training_runs(id),
+  artifact_hash TEXT NOT NULL UNIQUE, artifact_json TEXT NOT NULL CHECK(json_valid(artifact_json)),
+  file_reference TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE training_reports (
+  run_id TEXT PRIMARY KEY REFERENCES training_runs(id), report TEXT NOT NULL CHECK(json_valid(report))
+);
+CREATE TABLE training_evaluations (
+  run_id TEXT PRIMARY KEY REFERENCES training_runs(id), baseline_evaluation_id TEXT NOT NULL REFERENCES evaluation_runs(id),
+  challenger_evaluation_id TEXT NOT NULL REFERENCES evaluation_runs(id), comparison TEXT NOT NULL CHECK(json_valid(comparison))
+);
+CREATE TABLE training_events (
+  id INTEGER PRIMARY KEY, run_id TEXT NOT NULL REFERENCES training_runs(id), at TEXT NOT NULL,
+  stage TEXT NOT NULL, detail TEXT NOT NULL CHECK(json_valid(detail))
+);
+CREATE TRIGGER terminal_training_run BEFORE UPDATE ON training_runs
+WHEN OLD.status <> 'running' OR NEW.status NOT IN ('completed','failed') OR NEW.id <> OLD.id
+  OR NEW.dataset_id <> OLD.dataset_id OR NEW.started_at <> OLD.started_at OR NEW.code_hash <> OLD.code_hash
+  OR NEW.configuration <> OLD.configuration OR NEW.owner_pid IS NOT OLD.owner_pid
+BEGIN SELECT RAISE(ABORT, 'Only running training jobs can transition to a terminal state'); END;
+CREATE TRIGGER no_training_run_delete BEFORE DELETE ON training_runs
+BEGIN SELECT RAISE(ABORT, 'Training runs cannot be deleted'); END;
+`;
+
+export function protectTrainingHistory(db: DatabaseSync) {
+  for (const table of ['training_examples','model_artifacts','training_reports','training_evaluations','training_events'])
+    for (const operation of ['UPDATE','DELETE']) db.exec(`CREATE TRIGGER immutable_${table}_${operation}
+      BEFORE ${operation} ON ${table} BEGIN SELECT RAISE(ABORT, 'Training records are append-only'); END;`);
+}

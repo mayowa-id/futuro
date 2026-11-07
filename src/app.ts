@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { ArgumentsHost, Body, Catch, Controller, ExceptionFilter, Get, HttpException, Inject, Module, Param, Post, Query } from '@nestjs/common';
+import { ArgumentsHost, Body, Catch, Controller, ExceptionFilter, Get, HttpCode, HttpException, Inject, Module, Param, Post, Query } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { z } from 'zod';
 import { competitionSchema, modeSchema, timestamp } from './domain';
@@ -9,6 +9,7 @@ import { Store } from './store';
 import { Analytics } from './analytics';
 import { Research } from './research';
 import { marketSchema } from './domain';
+import { Training } from './training';
 
 @Catch()
 class ApiErrors implements ExceptionFilter {
@@ -23,14 +24,15 @@ class ApiErrors implements ExceptionFilter {
 
 @Controller()
 class ApiController {
-  constructor(@Inject('FUTURO') private readonly futuro: Futuro, @Inject('PROVIDERS') private readonly providers: Providers) {}
+  constructor(@Inject('FUTURO') private readonly futuro: Futuro, @Inject('PROVIDERS') private readonly providers: Providers,
+    @Inject('TRAINING') private readonly training: Training) {}
   @Get('health') health() { return { status: 'ok', name: 'Futuro', dataBudget: 0 }; }
   @Get('capabilities') capabilities() {
     return { storage: 'sqlite-local', model: 'uncalibrated-poisson-baseline',
       currentData: { provider: 'football-data.org', configured: Boolean(process.env.FOOTBALL_DATA_TOKEN), delayed: true },
       history: { provider: 'openfootball', apiKeyRequired: false },
       corners: 'unavailable', injuries: 'manual', odds: 'manual', externalPredictions: 'manual',
-      automaticBets: false, scheduledSync: false };
+      automaticBets: false, scheduledSync: false, training: 'local asynchronous Python jobs; validation-only selection' };
   }
   @Get('fixtures') fixtures(@Query() query: unknown) {
     const q = z.object({ competition: competitionSchema.optional(), status: z.string().optional() }).parse(query);
@@ -53,8 +55,9 @@ class ApiController {
   }
   @Post('evidence') evidence(@Body() body: unknown) { return this.futuro.addEvidence(body); }
   @Post('predictions') predict(@Body() body: unknown) {
-    const input = z.object({ fixtureId: z.string().min(1), mode: modeSchema.default('live'), cutoff: timestamp.optional() }).parse(body);
-    return this.futuro.predict(input.fixtureId, input.mode, input.cutoff);
+    const input = z.object({ fixtureId: z.string().min(1), mode: modeSchema.default('live'), cutoff: timestamp.optional(), modelId: z.string().optional() }).parse(body);
+    const futuro = input.modelId ? new Futuro(this.futuro.store, this.training.scorer(input.modelId, input.mode)) : this.futuro;
+    return futuro.predict(input.fixtureId, input.mode, input.cutoff);
   }
   @Get('predictions') predictions(@Query() query: unknown) {
     const q = z.object({ mode: modeSchema.default('live') }).parse(query);
@@ -75,6 +78,10 @@ class ApiController {
     return new Analytics(this.futuro.store).report(input);
   }
   @Get('models') models() { return new Research(this.futuro.store).models(); }
+  @Post('training') @HttpCode(202) startTraining(@Body() body: unknown) { return this.training.start(body); }
+  @Get('training') trainingRuns() { return this.training.list(); }
+  @Get('training/:id') trainingRun(@Param('id') id: string) { return this.training.get(id); }
+  @Post('training/:id/recover') recoverTraining(@Param('id') id: string) { return this.training.recover(id); }
   @Get('sources/performance') sourcePerformance() { return new Analytics(this.futuro.store).sourceReport(); }
   @Post('statistics') addStatistic(@Body() body: unknown) { return new Research(this.futuro.store).addStatistic(body); }
   @Get('fixtures/:id/statistics') statistics(@Param('id') id: string) { return new Research(this.futuro.store).statistics(id); }
@@ -89,9 +96,9 @@ class ApiController {
   }
 }
 
-export async function createApp(store: Store, futuro = new Futuro(store)) {
+export async function createApp(store: Store, futuro = new Futuro(store), training = new Training(store)) {
   @Module({ controllers: [ApiController], providers: [
-    { provide: 'FUTURO', useValue: futuro }, { provide: 'PROVIDERS', useValue: new Providers(store) },
+    { provide: 'FUTURO', useValue: futuro }, { provide: 'PROVIDERS', useValue: new Providers(store) }, { provide: 'TRAINING', useValue: training },
   ] })
   class AppModule {}
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn'], bodyParser: true });

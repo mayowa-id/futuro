@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { buildFeatures } from './features';
+import { buildFeatures, featureBlockers } from './features';
 import { evidenceInput, Evidence, Market, marketSchema, Mode, settledWin } from './domain';
 import { Store } from './store';
 
 const probabilitiesSchema = z.object(Object.fromEntries(marketSchema.options.map(m => [m, z.number().min(0).max(1)])) as Record<Market, z.ZodNumber>);
-const modelSchema = z.object({ modelVersion: z.string(), rates: z.array(z.number().finite()).length(2),
+export const modelSchema = z.object({ modelVersion: z.string(), rates: z.array(z.number().finite()).length(2),
   probabilities: probabilitiesSchema, calibrated: z.literal(false), limitations: z.array(z.string()),
   artifactHash: z.string().regex(/^[a-f0-9]{64}$/).optional(), specification: z.record(z.unknown()).optional() });
 export type ModelResult = z.infer<typeof modelSchema>;
@@ -43,10 +43,7 @@ export class Futuro {
       throw new Error('Live predictions require an observed, scheduled future fixture and a non-future cutoff.');
     const features = buildFeatures(this.store, target, cutoff, mode);
     const evidence = this.store.evidence(fixtureId).filter(e => e.observedAt <= cutoff && e.publishedAt <= cutoff);
-    const blockers: string[] = [];
-    if (features.leagueMatches < 20) blockers.push('Fewer than 20 completed league matches in the available history');
-    if (features.home.last5.played < 5 || features.away.last5.played < 5) blockers.push('Fewer than five completed matches for at least one team');
-    if (target.status === 'cancelled' || target.status === 'postponed') blockers.push('Fixture is cancelled or postponed');
+    const blockers = featureBlockers(target, features);
     const model = blockers.length ? null : modelSchema.parse(await this.scorer(features));
     const warnings = ['Uncalibrated research baseline; no demonstrated betting edge', 'Corner data unavailable; no corner recommendations',
       'Standings, injuries, motivation and source opinions are recorded evidence, not fitted model adjustments'];
@@ -83,9 +80,10 @@ export class Futuro {
     this.store.savePrediction(prediction);
     return prediction;
   }
-  settle() {
+  settle(predictionIds?: string[]) {
     let recorded = 0;
     for (const prediction of this.store.predictions()) {
+      if (predictionIds && !predictionIds.includes(prediction.id)) continue;
       const fixture = this.store.fixture(prediction.fixtureId);
       // Never assume cancellations/postponements are void under every bookmaker's rules.
       if (!fixture || fixture.status !== 'finished' || !fixture.score) continue;
