@@ -206,3 +206,55 @@ export function protectTrainingHistory(db: DatabaseSync) {
     for (const operation of ['UPDATE','DELETE']) db.exec(`CREATE TRIGGER immutable_${table}_${operation}
       BEFORE ${operation} ON ${table} BEGIN SELECT RAISE(ABORT, 'Training records are append-only'); END;`);
 }
+
+export const schemaV4 = `
+CREATE TABLE provider_cooldowns (provider TEXT PRIMARY KEY, retry_at TEXT NOT NULL);
+CREATE TABLE automation_runs (
+  id TEXT PRIMARY KEY, slot_key TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('running','waiting','completed','partial','failed')),
+  completed_at TEXT, configuration TEXT NOT NULL CHECK(json_valid(configuration))
+);
+CREATE INDEX automation_run_status ON automation_runs(status,created_at);
+CREATE TABLE automation_tasks (
+  id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES automation_runs(id),
+  kind TEXT NOT NULL CHECK(kind IN ('sync','predict','settle','report')), scope TEXT NOT NULL,
+  payload TEXT NOT NULL CHECK(json_valid(payload)),
+  status TEXT NOT NULL CHECK(status IN ('pending','running','retry_wait','succeeded','failed','skipped')),
+  attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at TEXT NOT NULL,
+  lock_token TEXT, error TEXT, output TEXT CHECK(output IS NULL OR json_valid(output)),
+  UNIQUE(run_id,kind,scope)
+);
+CREATE INDEX automation_tasks_due ON automation_tasks(status,next_attempt_at);
+CREATE TABLE automation_events (
+  id INTEGER PRIMARY KEY, run_id TEXT NOT NULL REFERENCES automation_runs(id), task_id TEXT REFERENCES automation_tasks(id),
+  at TEXT NOT NULL, event TEXT NOT NULL, detail TEXT NOT NULL CHECK(json_valid(detail))
+);
+CREATE TABLE automation_locks (
+  name TEXT PRIMARY KEY, token TEXT NOT NULL, owner_pid INTEGER NOT NULL, lease_until TEXT NOT NULL
+);
+CREATE TABLE automation_prediction_links (
+  key TEXT PRIMARY KEY, fixture_id TEXT NOT NULL REFERENCES fixture_catalog(id),
+  prediction_id TEXT NOT NULL UNIQUE REFERENCES predictions(id), kickoff TEXT NOT NULL,
+  model_ref TEXT NOT NULL, policy_version TEXT NOT NULL
+);
+CREATE TABLE automation_reports (
+  run_id TEXT PRIMARY KEY REFERENCES automation_runs(id), created_at TEXT NOT NULL,
+  report TEXT NOT NULL CHECK(json_valid(report))
+);
+CREATE TRIGGER terminal_automation_run BEFORE UPDATE ON automation_runs
+WHEN OLD.status IN ('completed','partial','failed') OR NEW.id <> OLD.id OR NEW.slot_key <> OLD.slot_key
+ OR NEW.created_at <> OLD.created_at OR NEW.configuration <> OLD.configuration
+BEGIN SELECT RAISE(ABORT, 'Completed workflow runs and their configuration are immutable'); END;
+CREATE TRIGGER terminal_automation_task BEFORE UPDATE ON automation_tasks
+WHEN OLD.status IN ('succeeded','failed','skipped') OR NEW.id <> OLD.id OR NEW.run_id <> OLD.run_id
+ OR NEW.kind <> OLD.kind OR NEW.scope <> OLD.scope OR NEW.payload <> OLD.payload OR NEW.attempts < OLD.attempts
+BEGIN SELECT RAISE(ABORT, 'Terminal workflow tasks and task inputs are immutable'); END;
+`;
+
+export function protectAutomationHistory(db: DatabaseSync) {
+  for (const table of ['automation_prediction_links','automation_events','automation_reports'])
+    for (const operation of ['UPDATE','DELETE']) db.exec(`CREATE TRIGGER immutable_${table}_${operation}
+      BEFORE ${operation} ON ${table} BEGIN SELECT RAISE(ABORT, 'Workflow history is append-only'); END;`);
+  for (const table of ['automation_runs','automation_tasks']) db.exec(`CREATE TRIGGER no_delete_${table}
+    BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT, 'Workflow history cannot be deleted'); END;`);
+}

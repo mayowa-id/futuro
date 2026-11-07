@@ -10,6 +10,7 @@ import { Analytics } from './analytics';
 import { Research } from './research';
 import { marketSchema } from './domain';
 import { Training } from './training';
+import { Automation } from './automation';
 
 @Catch()
 class ApiErrors implements ExceptionFilter {
@@ -25,14 +26,14 @@ class ApiErrors implements ExceptionFilter {
 @Controller()
 class ApiController {
   constructor(@Inject('FUTURO') private readonly futuro: Futuro, @Inject('PROVIDERS') private readonly providers: Providers,
-    @Inject('TRAINING') private readonly training: Training) {}
+    @Inject('TRAINING') private readonly training: Training, @Inject('AUTOMATION') private readonly automation: Automation) {}
   @Get('health') health() { return { status: 'ok', name: 'Futuro', dataBudget: 0 }; }
   @Get('capabilities') capabilities() {
     return { storage: 'sqlite-local', model: 'uncalibrated-poisson-baseline',
       currentData: { provider: 'football-data.org', configured: Boolean(process.env.FOOTBALL_DATA_TOKEN), delayed: true },
       history: { provider: 'openfootball', apiKeyRequired: false },
       corners: 'unavailable', injuries: 'manual', odds: 'manual', externalPredictions: 'manual',
-      automaticBets: false, scheduledSync: false, training: 'local asynchronous Python jobs; validation-only selection' };
+      automaticBets: false, scheduledSync: this.automation.config.enabled, training: 'local asynchronous Python jobs; validation-only selection' };
   }
   @Get('fixtures') fixtures(@Query() query: unknown) {
     const q = z.object({ competition: competitionSchema.optional(), status: z.string().optional() }).parse(query);
@@ -78,6 +79,10 @@ class ApiController {
     return new Analytics(this.futuro.store).report(input);
   }
   @Get('models') models() { return new Research(this.futuro.store).models(); }
+  @Get('automation/status') automationStatus() { return this.automation.status(); }
+  @Get('automation/runs') automationRuns() { return this.automation.list(); }
+  @Get('automation/runs/:id') automationRun(@Param('id') id: string) { return this.automation.get(id); }
+  @Post('automation/run') @HttpCode(202) startAutomation(@Body() body: unknown) { return this.automation.start(body ?? {}); }
   @Post('training') @HttpCode(202) startTraining(@Body() body: unknown) { return this.training.start(body); }
   @Get('training') trainingRuns() { return this.training.list(); }
   @Get('training/:id') trainingRun(@Param('id') id: string) { return this.training.get(id); }
@@ -96,9 +101,11 @@ class ApiController {
   }
 }
 
-export async function createApp(store: Store, futuro = new Futuro(store), training = new Training(store)) {
+export async function createApp(store: Store, futuro = new Futuro(store), training = new Training(store),
+  automation = new Automation(store, futuro, new Providers(store), training)) {
   @Module({ controllers: [ApiController], providers: [
     { provide: 'FUTURO', useValue: futuro }, { provide: 'PROVIDERS', useValue: new Providers(store) }, { provide: 'TRAINING', useValue: training },
+    { provide: 'AUTOMATION', useValue: automation },
   ] })
   class AppModule {}
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn'], bodyParser: true });

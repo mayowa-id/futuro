@@ -4,6 +4,7 @@ import { z } from 'zod';
 export const competitionSchema = z.enum(['PL', 'PD', 'BL1', 'SA', 'FL1', 'PPL']);
 export const modeSchema = z.enum(['live', 'historical', 'demo']);
 export type Mode = z.infer<typeof modeSchema>;
+export type PredictionTracking = { key: string; kickoff: string; modelRef: string; policyVersion: string };
 export const marketSchema = z.enum(['home_win', 'away_win', 'over_1_5', 'over_2_5', 'home_win_or_over_2_5', 'away_win_or_over_2_5']);
 export type Market = z.infer<typeof marketSchema>;
 export const scoreSchema = z.tuple([z.number().int().min(0).max(100), z.number().int().min(0).max(100)]);

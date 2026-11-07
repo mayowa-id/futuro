@@ -8,6 +8,8 @@ Research update: schema version 2 introduced normalized fixtures/results/statist
 
 Training update: schema version 3 and the local trainer now implement fitted goal-rate corrections, validation-only parameter search, immutable artifacts and a held-out baseline/challenger comparison. See TRAINING.md. Automatic promotion, scheduled retraining and richer trained features remain future work. NICHE_MARKET_RESEARCH.md records less-obvious market hypotheses and the evidence required before extending the scoring contract.
 
+Automation update: schema version 4 adds local scheduled fixture/result sync, pre-kickoff prediction tracking, live settlement and analytics snapshots, with durable retries, shared free-provider budgets/cooldowns, crash recovery and lease fencing. See AUTOMATION.md. A free football-data.org token and running local services are needed for live operation; the frontend remains the next separate milestone.
+
 ## First vertical slice
 
 Build a local NestJS API/worker, PostgreSQL database, and small Python model service. Use Redis/BullMQ for scheduled ingestion and settlement. Start with OpenFootball historical JSON and football-data.org free current fixtures behind adapters, plus a fixture-file adapter for offline development. Support manual odds and availability entry. Add the Next.js board after the ingestion-to-settlement API works; frontend scope is not part of this provider review.

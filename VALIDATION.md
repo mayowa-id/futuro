@@ -1,5 +1,13 @@
 # Initial implementation validation
 
+## Scheduled workflow validation (2026-11-07)
+
+- 28 TypeScript tests passed, including 11 new scheduler/provider cases, and the TypeScript check passed.
+- Controlled integration tests cover live forecast creation, slot/forecast deduplication, completed-result settlement, saved calibration/error/variance reports, persisted retry timing, provider-wide cooldowns, post-commit crash recovery, lease fencing, late scoring rejection, deadline skips, isolated league failures and HTTP lifecycle routes.
+- These tests use controlled provider responses and clocks. They do not establish authenticated coverage or real-world prediction accuracy.
+- Version 4 adds automatic consistent backup/migration for the existing database; no API token is stored in run configurations or error records.
+- A real one-shot run was recorded locally without a configured token. It correctly failed the five sync tasks once each, made no provider requests, retained their credential errors, and stored an empty live report. This validates the missing-credential path rather than authenticated live operation.
+
 ## Training pipeline validation (2026-11-06)
 
 - 17 TypeScript tests and 7 Python tests passed; TypeScript type check passed.
@@ -35,6 +43,6 @@ Node's direct OpenFootball HTTPS request failed here. PowerShell downloaded the 
 
 Some Node commands required execution outside the filesystem sandbox because Windows blocked path resolution at the user directory. Dependency installation required network permission. These are execution-environment restrictions, not paid services.
 
-No football-data.org token was available/configured for this validation. Its adapter's response parsing is tested, but authenticated current-data sync, live entitlement, and standings responses have not been verified against an account. Injury, source, and quote inputs remain manual; corners and scheduled workers remain unavailable.
+No football-data.org token was available/configured for the initial validation. Its adapter's response parsing is tested, but authenticated current-data sync, live entitlement, and standings responses have not been verified against an account. Injury, source, and quote inputs remain manual; corner models remain unavailable. A local scheduler was subsequently implemented as documented above and in AUTOMATION.md.
 
 Reproduce with the README instructions and a running local Python model. Running the demo/replay again appends new prediction records; reporting selects the latest prediction per fixture. Original prediction records are preserved.

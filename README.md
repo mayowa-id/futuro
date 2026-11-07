@@ -70,7 +70,7 @@ if ($fixture) {
 }
 ```
 
-Free provider scores/schedules are delayed. Sync is explicit: no background scheduler or live polling is enabled. Current matches cache for six hours, tables for twelve. Requests are capped at eight per minute with no automatic retry storm or paid fallback. History entitlement is not assumed.
+Free provider scores/schedules are delayed. Manual sync remains available, and an optional local scheduler now syncs results/fixtures, generates pre-kickoff forecasts and settles them every six hours. See [AUTOMATION.md](AUTOMATION.md) to enable it and inspect run history. Current matches cache for six hours, tables for twelve. Shared free-provider limits, cooldowns and bounded retries apply; no paid fallback is used. History entitlement is not assumed.
 
 Team identities use exact normalized names and explicit aliases in **config/team-aliases.json**. Audit source names when combining providers; add aliases only for verified equivalents. The same home/away teams within a league season map to one fixture, keeping postponements stable. This identity scheme is intended for the supported home-and-away domestic leagues, not arbitrary cup formats. Football-data records take precedence over OpenFootball fallbacks for matching fixtures.
 
@@ -155,6 +155,8 @@ Tests cover provider parsing, regulation-time scores, idempotency, cutoff leakag
 Implemented: local NestJS API, standard-library Python scoring service, SQLite persistence/revision schema, two free-data adapters, manual evidence, historical replay, analytical settlement, and performance reporting.
 
 The research schema includes normalized football/results/statistics records, exact new feature-input lineage, model artifact/configuration registration, calibration and variance diagnostics, frozen chronological datasets, and immutable evaluation comparisons. Schema version 3 adds a working asynchronous trainer, immutable artifacts, frozen training examples and experiment lifecycle reports. Completed match corner/shot/xG observations can be recorded manually; they are not automatically used by the goal model.
+
+Schema version 4 adds persistent scheduled workflow tasks, retry/cooldown state, atomic automatic-prediction deduplication, saved live analytics reports, and save-time kickoff checks. Set the free token and `AUTOMATION_ENABLED=true`, then keep the local services running. No API token is included in the repository.
 
 Deferred: frontend, PostgreSQL adapter, Redis/BullMQ workers, automated article/injury/odds ingestion, richer trained features and probability calibration, corner models, secondary-league adapters, bookmaker-specific void handling, and public authentication. SQLite and Python's standard HTTP server keep this local milestone dependency-light; the documented PostgreSQL/FastAPI/queue direction can be introduced as usage requires it.
 
