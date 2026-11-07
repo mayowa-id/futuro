@@ -1,8 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { Evidence, Fixture, hash, Mode } from './domain';
-import { protectHistory, protectTrainingHistory, schemaV2, schemaV3 } from './schema';
+import { Evidence, Fixture, hash, Mode, PredictionTracking } from './domain';
+import { protectAutomationHistory, protectHistory, protectTrainingHistory, schemaV2, schemaV3, schemaV4 } from './schema';
+import { RetryableError } from './errors';
 import { projectEvidence, projectFixture, projectPrediction, projectSettlement, seedMarkets } from './projections';
 
 export class Store {
@@ -46,6 +47,15 @@ export class Store {
         this.db.exec(schemaV3);
         protectTrainingHistory(this.db);
         this.db.prepare('INSERT INTO schema_version VALUES (3)').run();
+      }); } catch (error) { this.db.close(); throw error; }
+    }
+    if (version < 4) {
+      if (path !== ':memory:' && Number(this.db.prepare('SELECT COUNT(*) AS n FROM fixture_revisions').get()?.n) > 0)
+        this.db.prepare('VACUUM INTO ?').run(`${path}.pre-v4-${Date.now()}.sqlite`);
+      try { this.atomic(() => {
+        this.db.exec(schemaV4);
+        protectAutomationHistory(this.db);
+        this.db.prepare('INSERT INTO schema_version VALUES (4)').run();
       }); } catch (error) { this.db.close(); throw error; }
     }
   }
@@ -105,10 +115,22 @@ export class Store {
   evidence(fixtureId: string): Evidence[] {
     return this.db.prepare('SELECT payload FROM evidence WHERE fixture_id=?').all(fixtureId).map(r => JSON.parse(String(r.payload)));
   }
-  savePrediction(p: any) {
-    this.atomic(() => {
+  trackedPrediction(key: string): any | undefined {
+    const row = this.db.prepare('SELECT p.payload FROM automation_prediction_links a JOIN predictions p ON p.id=a.prediction_id WHERE a.key=?').get(key);
+    return row ? JSON.parse(String(row.payload)) : undefined;
+  }
+  savePrediction<T extends { id: string; fixtureId: string; mode: Mode }>(p: T, tracking?: PredictionTracking, beforeSave?: () => void): T {
+    return this.atomic(() => {
+      beforeSave?.();
+      if (tracking) {
+        const existing = this.trackedPrediction(tracking.key);
+        if (existing) return existing as T;
+      }
       this.db.prepare('INSERT INTO predictions VALUES (?, ?, ?, ?)').run(p.id, p.fixtureId, p.mode, JSON.stringify(p));
       projectPrediction(this.db, p);
+      if (tracking) this.db.prepare('INSERT INTO automation_prediction_links VALUES (?,?,?,?,?,?)')
+        .run(tracking.key, p.fixtureId, p.id, tracking.kickoff, tracking.modelRef, tracking.policyVersion);
+      return p;
     });
   }
   predictions(mode?: Mode): any[] {
@@ -123,14 +145,30 @@ export class Store {
     });
   }
   settlements(): any[] { return this.db.prepare('SELECT payload FROM settlements ORDER BY rowid').all().map(r => JSON.parse(String(r.payload))); }
-  requestSlot(provider: string, now: string, perMinute: number) {
-    const count = this.db.prepare('SELECT COUNT(*) AS n FROM provider_requests WHERE provider=? AND requested_at>?').get(provider, new Date(Date.parse(now) - 60_000).toISOString());
-    if (Number(count?.n) >= perMinute) throw new Error('Free provider request limit reached; retry after a minute.');
-    this.db.prepare('INSERT INTO provider_requests(provider, requested_at) VALUES (?, ?)').run(provider, now);
+  providerCooldown(provider: string, now: string): string | undefined {
+    const row = this.db.prepare('SELECT retry_at FROM provider_cooldowns WHERE provider=? AND retry_at>?').get(provider, now);
+    return row ? String(row.retry_at) : undefined;
   }
-  cache(key: string, ttlMs: number): { capturedAt: string; payload: any } | undefined {
+  setProviderCooldown(provider: string, retryAt: string) {
+    this.db.prepare(`INSERT INTO provider_cooldowns VALUES (?,?) ON CONFLICT(provider) DO UPDATE SET retry_at=excluded.retry_at
+      WHERE excluded.retry_at>provider_cooldowns.retry_at`).run(provider, retryAt);
+  }
+  requestSlot(provider: string, now: string, perMinute: number, perDay = 200) {
+    this.atomic(() => {
+      const count = this.db.prepare('SELECT COUNT(*) AS n, MIN(requested_at) AS first_at FROM provider_requests WHERE provider=? AND requested_at>?')
+        .get(provider, new Date(Date.parse(now) - 60_000).toISOString());
+      if (Number(count?.n) >= perMinute) throw new RetryableError('Local free-provider minute budget reached', true,
+        new Date(Date.parse(String(count?.first_at)) + 60_001).toISOString());
+      const start = `${now.slice(0, 10)}T00:00:00.000Z`;
+      const daily = this.db.prepare('SELECT COUNT(*) AS n FROM provider_requests WHERE provider=? AND requested_at>=?').get(provider, start);
+      if (Number(daily?.n) >= perDay) throw new RetryableError('Local free-provider daily budget reached', true,
+        new Date(Date.parse(start) + 86400_000).toISOString());
+      this.db.prepare('INSERT INTO provider_requests(provider, requested_at) VALUES (?, ?)').run(provider, now);
+    });
+  }
+  cache(key: string, ttlMs: number, now = Date.now()): { capturedAt: string; payload: any } | undefined {
     const row = this.db.prepare('SELECT * FROM response_cache WHERE key=?').get(key);
-    if (!row || Date.now() - Date.parse(String(row.captured_at)) >= ttlMs) return undefined;
+    if (!row || now < Date.parse(String(row.captured_at)) || now - Date.parse(String(row.captured_at)) >= ttlMs) return undefined;
     return { capturedAt: String(row.captured_at), payload: JSON.parse(String(row.payload)) };
   }
   putCache(key: string, capturedAt: string, payload: unknown) {

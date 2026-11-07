@@ -1,6 +1,6 @@
 # Futuro database and learning design
 
-Current schema version: 3. The version 2 relationships below remain intact; version 3 adds the working trainer's artifact/example/report records, described in TRAINING.md. The database keeps football observations, prediction decisions, and experiment results as separate histories. A later correction adds a record rather than rewriting the evidence behind an earlier forecast.
+Current schema version: 4. The version 2 relationships below remain intact; version 3 adds training records described in TRAINING.md, and version 4 adds durable scheduled workflows described in AUTOMATION.md. The database keeps football observations, prediction decisions, and experiment results as separate histories. A later correction adds a record rather than rewriting the evidence behind an earlier forecast.
 
 The implementation is local SQLite with foreign keys, indexes, integrity checks, and transactional migration/backfill. The relational structure is suitable for a later PostgreSQL adapter; no paid database service is required.
 
@@ -57,6 +57,8 @@ erDiagram
 | Training provenance | `training_runs`, `training_examples`, `training_events` | Actual local trainer jobs, exact eligible/blocked snapshots, configuration/code hash and lifecycle |
 | Trained artifacts | `model_artifacts`, `training_reports`, `training_evaluations` | Immutable artifact JSON/digest/file reference, validation trials, and linked baseline/challenger test comparison |
 | Frozen evaluation | `evaluation_runs`, `evaluation_predictions`, `evaluation_items` | Stored metric version/results and exact predictions/settlements used in a comparison |
+| Daily operations | `automation_runs`, `automation_tasks`, `automation_locks`, `provider_cooldowns` | Frozen run policy, durable task/retry state, worker lease and shared throttling |
+| Live tracking audit | `automation_prediction_links`, `automation_events`, `automation_reports` | Atomic prediction deduplication, lifecycle history and immutable live analytics snapshots |
 
 Existing `fixtures`, `evidence`, `predictions` and `settlements` JSON records remain intact for compatibility and audit. Their relational projections are written in the same transaction. A projection failure rolls back the original write too. They are not separately editable competing sources of truth.
 
@@ -166,7 +168,7 @@ Corners can be stored now; a corner forecasting model still requires enough reli
 
 ## Migration and operations
 
-`Store` applies migrations automatically on first open, through current version 3. Existing populated databases get a SQLite-consistent backup beside the database named `*.pre-vN-TIMESTAMP.sqlite`, before each migration transaction. All projections/backfills for a migration commit together; a failed migration rolls back. Original JSON histories stay intact.
+`Store` applies migrations automatically on first open, through current version 4. Existing populated databases get a SQLite-consistent backup beside the database named `*.pre-vN-TIMESTAMP.sqlite`, before each migration transaction. All projections/backfills for a migration commit together; a failed migration rolls back. Original JSON histories stay intact.
 
 ```powershell
 npm run db:inspect

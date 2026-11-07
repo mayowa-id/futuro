@@ -11,7 +11,8 @@
     "import:openfootball": "tsx scripts/import.ts",
     "backtest": "tsx scripts/backtest.ts",
     "db:inspect": "tsx scripts/inspect-db.ts",
-    "train": "tsx scripts/train.ts"
+    "train": "tsx scripts/train.ts",
+    "automation:once": "tsx scripts/automation.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",

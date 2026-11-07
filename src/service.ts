@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { buildFeatures, featureBlockers } from './features';
-import { evidenceInput, Evidence, Market, marketSchema, Mode, settledWin } from './domain';
+import { evidenceInput, Evidence, Market, marketSchema, Mode, PredictionTracking, settledWin } from './domain';
+import { RetryableError } from './errors';
 import { Store } from './store';
 
 const probabilitiesSchema = z.object(Object.fromEntries(marketSchema.options.map(m => [m, z.number().min(0).max(1)])) as Record<Market, z.ZodNumber>);
@@ -22,7 +23,7 @@ export const httpScorer: Scorer = async features => {
 };
 
 export class Futuro {
-  constructor(readonly store: Store, private scorer: Scorer = httpScorer) {}
+  constructor(readonly store: Store, private scorer: Scorer = httpScorer, private clock: () => Date = () => new Date()) {}
   addEvidence(input: unknown) {
     const parsed = evidenceInput.parse(input);
     if (!this.store.fixture(parsed.fixtureId)) throw new Error('Fixture not found');
@@ -32,14 +33,14 @@ export class Futuro {
     this.store.addEvidence(e);
     return e;
   }
-  async predict(fixtureId: string, mode: Mode, suppliedCutoff?: string) {
+  async predict(fixtureId: string, mode: Mode, suppliedCutoff?: string, tracking?: PredictionTracking, beforeSave?: () => void) {
     const target = this.store.fixture(fixtureId);
     if (!target) throw new Error('Fixture not found');
-    const now = new Date().toISOString();
+    const now = this.clock().toISOString();
     if ((target.provider === 'demo') !== (mode === 'demo')) throw new Error('Demo fixtures and real fixtures must use separate prediction modes.');
     const cutoff = suppliedCutoff ?? (mode === 'live' ? now : target.kickoff);
     if (Date.parse(cutoff) > Date.parse(target.kickoff)) throw new Error('Prediction cutoff must be before or at kickoff.');
-    if (mode === 'live' && (cutoff > now || target.observedAt > cutoff || target.status !== 'scheduled' || Date.parse(target.kickoff) <= Date.now()))
+    if (mode === 'live' && (cutoff > now || target.observedAt > cutoff || target.status !== 'scheduled' || Date.parse(target.kickoff) <= this.clock().getTime()))
       throw new Error('Live predictions require an observed, scheduled future fixture and a non-future cutoff.');
     const features = buildFeatures(this.store, target, cutoff, mode);
     const evidence = this.store.evidence(fixtureId).filter(e => e.observedAt <= cutoff && e.publishedAt <= cutoff);
@@ -77,8 +78,16 @@ export class Futuro {
       fixture: { id: target.id, home: target.home, away: target.away, kickoff: target.kickoff, dateOnly: target.dateOnly },
       features, evidence, model, candidates, blockers, warnings,
       explanation: `${target.home}: ${features.home.last5.wins}/${features.home.last5.played} recent wins; ${target.away}: ${features.away.last5.wins}/${features.away.last5.played}. ${features.leagueMatches} prior league matches. Probabilities are experimental.` };
-    this.store.savePrediction(prediction);
-    return prediction;
+    return this.store.savePrediction(prediction, tracking, () => {
+      beforeSave?.();
+      const savedAt = this.clock().toISOString();
+      if (mode === 'live') {
+        const latest = this.store.fixture(fixtureId);
+        if (savedAt >= target.kickoff || latest?.status !== 'scheduled' || latest.kickoff !== target.kickoff)
+          throw new RetryableError('Fixture started or changed while scoring; prediction was not saved', false);
+      }
+      prediction.createdAt = savedAt;
+    });
   }
   settle(predictionIds?: string[]) {
     let recorded = 0;

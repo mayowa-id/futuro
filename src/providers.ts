@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { competitionSchema, Fixture, fixtureId, fixtureSchema, scoreSchema, teamKey } from './domain';
 import { Store } from './store';
+import { RetryableError, retryAfter } from './errors';
 
 export const openLeagues = { PL: 'en.1', PD: 'es.1', BL1: 'de.1', SA: 'it.1', FL1: 'fr.1', PPL: 'pt.1' } as const;
 export const seasonSchema = z.string().regex(/^20\d{2}-\d{2}$/).refine(s => Number(s.slice(5)) === (Number(s.slice(0, 4)) + 1) % 100, 'Season must be consecutive, e.g. 2024-25');
@@ -49,21 +50,31 @@ export function normalizeFootballData(raw: unknown, capturedAt: string, aliasMap
 }
 
 export class Providers {
-  constructor(private readonly store: Store) {}
+  constructor(private readonly store: Store, private readonly options: { fetch?: typeof fetch; now?: () => Date } = {}) {}
   private async request(provider: string, url: string, headers: Record<string, string>, ttlMs: number) {
-    const cache = this.store.cache(url, ttlMs);
+    const requestedAt = (this.options.now?.() ?? new Date()).toISOString();
+    const cache = this.store.cache(url, ttlMs, Date.parse(requestedAt));
     if (cache) return { ...cache, cached: true };
-    const capturedAt = new Date().toISOString();
-    this.store.requestSlot(provider, capturedAt, provider === 'football-data' ? 8 : 6);
+    const cooldown = this.store.providerCooldown(provider, requestedAt);
+    if (cooldown) throw new RetryableError(`${provider} cooldown is active`, true, cooldown);
+    this.store.requestSlot(provider, requestedAt, provider === 'football-data' ? 8 : 6);
     let response: Response;
-    try { response = await fetch(url, { headers, signal: AbortSignal.timeout(20_000), redirect: 'error' }); }
+    try { response = await (this.options.fetch ?? fetch)(url, { headers, signal: AbortSignal.timeout(20_000), redirect: 'error' }); }
     catch (error) {
       const cause = error instanceof Error ? (error as Error & { cause?: { code?: string } }).cause?.code : undefined;
       const code = cause && /^[A-Z_0-9]+$/.test(cause) ? ` (${cause})` : '';
-      throw new Error(`${provider} request failed${code}. Check connectivity and retry; no automatic paid fallback.`);
+      throw new RetryableError(`${provider} request failed${code}. Check connectivity and retry; no automatic paid fallback.`, true);
     }
-    if (!response.ok) throw new Error(`${provider} returned HTTP ${response.status}. Check free entitlement or retry later.`);
+    if (!response.ok) {
+      const now = (this.options.now?.() ?? new Date()).getTime();
+      const retryAt = retryAfter(response.headers.get('Retry-After'), now) ??
+        (response.status === 429 ? new Date(now + 60_000).toISOString() : undefined);
+      if (retryAt && (response.status === 429 || response.status === 503)) this.store.setProviderCooldown(provider, retryAt);
+      throw new RetryableError(`${provider} returned HTTP ${response.status}. Check free entitlement or retry later.`,
+        response.status === 429 || response.status >= 500, retryAt);
+    }
     const payload: unknown = await response.json();
+    const capturedAt = (this.options.now?.() ?? new Date()).toISOString();
     this.store.putCache(url, capturedAt, payload);
     return { payload, capturedAt, cached: false };
   }
@@ -77,7 +88,7 @@ export class Providers {
   }
   async syncFootballData(competition: z.infer<typeof competitionSchema>) {
     const token = process.env.FOOTBALL_DATA_TOKEN;
-    if (!token) throw new Error('Configure a free FOOTBALL_DATA_TOKEN in .env.');
+    if (!token) throw new RetryableError('Configure a free FOOTBALL_DATA_TOKEN in .env.', false);
     const response = await this.request('football-data', `https://api.football-data.org/v4/competitions/${competition}/matches`, { 'X-Auth-Token': token }, 6 * 3600_000);
     const fixtures = normalizeFootballData(response.payload, response.capturedAt, aliases());
     this.store.ingest('football-data', response.capturedAt, response.payload, fixtures);
@@ -85,7 +96,7 @@ export class Providers {
   }
   async standings(competition: z.infer<typeof competitionSchema>) {
     const token = process.env.FOOTBALL_DATA_TOKEN;
-    if (!token) throw new Error('Configure a free FOOTBALL_DATA_TOKEN in .env.');
+    if (!token) throw new RetryableError('Configure a free FOOTBALL_DATA_TOKEN in .env.', false);
     const response = await this.request('football-data', `https://api.football-data.org/v4/competitions/${competition}/standings`, { 'X-Auth-Token': token }, 12 * 3600_000);
     this.store.ingest('football-data-standings', response.capturedAt, response.payload, []);
     return response;
