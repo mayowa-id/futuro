@@ -2,7 +2,7 @@
 
 Current schema version: 4. The version 2 relationships below remain intact; version 3 adds training records described in TRAINING.md, and version 4 adds durable scheduled workflows described in AUTOMATION.md. The database keeps football observations, prediction decisions, and experiment results as separate histories. A later correction adds a record rather than rewriting the evidence behind an earlier forecast.
 
-The implementation is local SQLite with foreign keys, indexes, integrity checks, and transactional migration/backfill. The relational structure is suitable for a later PostgreSQL adapter; no paid database service is required.
+Application storage uses PostgreSQL when `DATABASE_URL` is set, or local SQLite otherwise. [PostgreSQL migrations](POSTGRES.md) maintain the equivalent 45 data tables and history protections in Neon's `futuro` schema, with insertion-order identities and bulk ingestion. PostgreSQL migration numbering is separate from SQLite's schema version. Existing local history is not automatically uploaded. No paid database service is required.
 
 ## How the records connect
 

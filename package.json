@@ -5,28 +5,38 @@
   "description": "Free-data football prediction research and tracking backend",
   "scripts": {
     "dev": "tsx src/main.ts",
-    "build": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/main.js",
+    "smoke:production": "node scripts/smoke-production.mjs",
+    "test": "tsx --test test/*.test.ts && node --test test/*.test.mjs",
     "demo": "tsx scripts/demo.ts",
     "import:openfootball": "tsx scripts/import.ts",
     "backtest": "tsx scripts/backtest.ts",
     "db:inspect": "tsx scripts/inspect-db.ts",
+    "db:migrate": "node dist/postgres/cli.js migrate",
+    "db:status": "node dist/postgres/cli.js status",
     "train": "tsx scripts/train.ts",
-    "automation:once": "tsx scripts/automation.ts"
+    "automation:once": "tsx scripts/automation.ts",
+    "automation:hosted": "node scripts/hosted-run.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",
     "@nestjs/core": "^11.1.0",
     "@nestjs/platform-express": "^11.1.0",
     "dotenv": "^16.5.0",
+    "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },
-  "engines": { "node": ">=22.13.0" }
+  "engines": {
+    "node": ">=22.13.0"
+  }
 }

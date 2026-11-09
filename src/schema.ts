@@ -1,5 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
-
+import { Database } from './database';
 export const schemaV2 = `
 CREATE TABLE competitions (
   id TEXT PRIMARY KEY, name TEXT NOT NULL
@@ -153,19 +152,18 @@ CREATE TABLE evaluation_items (
   settlement_id TEXT NOT NULL REFERENCES candidate_settlements(id), PRIMARY KEY(evaluation_id, candidate_id)
 );
 `;
-
-export function protectHistory(db: DatabaseSync) {
-  for (const table of ['fixture_revisions', 'raw_observations', 'evidence', 'predictions', 'settlements',
-    'match_results', 'fixture_provenance', 'football_statistics', 'market_definitions', 'evidence_observations', 'odds_quotes',
-    'prediction_sources', 'source_recommendations',
-    'model_versions', 'feature_snapshots', 'feature_inputs', 'prediction_runs', 'prediction_evidence',
-    'market_candidates', 'candidate_settlements', 'datasets', 'dataset_members', 'evaluation_runs',
-    'evaluation_predictions', 'evaluation_items']) {
-    for (const operation of ['UPDATE', 'DELETE']) db.exec(`CREATE TRIGGER IF NOT EXISTS immutable_${table}_${operation}
+export async function protectHistory(db: Database) {
+    for (const table of ['fixture_revisions', 'raw_observations', 'evidence', 'predictions', 'settlements',
+        'match_results', 'fixture_provenance', 'football_statistics', 'market_definitions', 'evidence_observations', 'odds_quotes',
+        'prediction_sources', 'source_recommendations',
+        'model_versions', 'feature_snapshots', 'feature_inputs', 'prediction_runs', 'prediction_evidence',
+        'market_candidates', 'candidate_settlements', 'datasets', 'dataset_members', 'evaluation_runs',
+        'evaluation_predictions', 'evaluation_items']) {
+        for (const operation of ['UPDATE', 'DELETE'])
+            await db.exec(`CREATE TRIGGER IF NOT EXISTS immutable_${table}_${operation}
       BEFORE ${operation} ON ${table} BEGIN SELECT RAISE(ABORT, 'Historical records are append-only'); END;`);
-  }
+    }
 }
-
 export const schemaV3 = `
 ALTER TABLE training_runs ADD COLUMN failure_reason TEXT;
 ALTER TABLE training_runs ADD COLUMN owner_pid INTEGER;
@@ -200,13 +198,12 @@ BEGIN SELECT RAISE(ABORT, 'Only running training jobs can transition to a termin
 CREATE TRIGGER no_training_run_delete BEFORE DELETE ON training_runs
 BEGIN SELECT RAISE(ABORT, 'Training runs cannot be deleted'); END;
 `;
-
-export function protectTrainingHistory(db: DatabaseSync) {
-  for (const table of ['training_examples','model_artifacts','training_reports','training_evaluations','training_events'])
-    for (const operation of ['UPDATE','DELETE']) db.exec(`CREATE TRIGGER immutable_${table}_${operation}
+export async function protectTrainingHistory(db: Database) {
+    for (const table of ['training_examples', 'model_artifacts', 'training_reports', 'training_evaluations', 'training_events'])
+        for (const operation of ['UPDATE', 'DELETE'])
+            await db.exec(`CREATE TRIGGER immutable_${table}_${operation}
       BEFORE ${operation} ON ${table} BEGIN SELECT RAISE(ABORT, 'Training records are append-only'); END;`);
 }
-
 export const schemaV4 = `
 CREATE TABLE provider_cooldowns (provider TEXT PRIMARY KEY, retry_at TEXT NOT NULL);
 CREATE TABLE automation_runs (
@@ -250,11 +247,12 @@ WHEN OLD.status IN ('succeeded','failed','skipped') OR NEW.id <> OLD.id OR NEW.r
  OR NEW.kind <> OLD.kind OR NEW.scope <> OLD.scope OR NEW.payload <> OLD.payload OR NEW.attempts < OLD.attempts
 BEGIN SELECT RAISE(ABORT, 'Terminal workflow tasks and task inputs are immutable'); END;
 `;
-
-export function protectAutomationHistory(db: DatabaseSync) {
-  for (const table of ['automation_prediction_links','automation_events','automation_reports'])
-    for (const operation of ['UPDATE','DELETE']) db.exec(`CREATE TRIGGER immutable_${table}_${operation}
+export async function protectAutomationHistory(db: Database) {
+    for (const table of ['automation_prediction_links', 'automation_events', 'automation_reports'])
+        for (const operation of ['UPDATE', 'DELETE'])
+            await db.exec(`CREATE TRIGGER immutable_${table}_${operation}
       BEFORE ${operation} ON ${table} BEGIN SELECT RAISE(ABORT, 'Workflow history is append-only'); END;`);
-  for (const table of ['automation_runs','automation_tasks']) db.exec(`CREATE TRIGGER no_delete_${table}
+    for (const table of ['automation_runs', 'automation_tasks'])
+        await db.exec(`CREATE TRIGGER no_delete_${table}
     BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT, 'Workflow history cannot be deleted'); END;`);
 }

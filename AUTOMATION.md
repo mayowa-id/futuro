@@ -1,6 +1,6 @@
 # Scheduled prediction and result tracking
 
-The local scheduler runs a durable workflow: refresh fixtures/results, create pre-kickoff forecasts, settle live predictions, and store a performance snapshot. It uses the existing free football-data.org integration and local database; there is no paid scheduler, queue service or betting integration.
+The scheduler runs a durable workflow: refresh fixtures/results, create pre-kickoff forecasts, settle live predictions, and store a performance snapshot. It uses the free football-data.org integration and the configured SQLite or PostgreSQL database. Render can use the external GitHub schedule below; no paid scheduler or queue service is required.
 
 ## Enable it
 
@@ -47,14 +47,15 @@ No old predictions or settlements are replaced. Historical and synthetic experim
 ## Limits and retries
 
 - Current fixture/result responses cache for six hours; standings retain their twelve-hour cache.
-- All uncached provider calls reserve their budget transactionally in SQLite, shared by manual endpoints, scheduler runs and retries. Local limits are eight requests/minute and 200/provider/UTC day. The daily cap is our own budget policy, not a claim about the provider's published daily allowance.
+- All uncached provider calls reserve their budget transactionally in the configured database, shared by manual endpoints, scheduler runs and retries. Local limits are eight requests/minute and 200/provider/UTC day. The daily cap is our own budget policy, not a claim about the provider's published daily allowance.
 - A normal five-league, four-cycle day is approximately 20 fixture-list requests before retries/manual work. Results and upcoming fixtures come from the same league request.
 - HTTP 429 and supported 503 `Retry-After` responses establish a persisted provider-wide cooldown. Other leagues/routes wait rather than sending more calls during that cooldown. A missing 429 header defaults to one minute.
+- Successful football-data.org responses are also checked for remaining quota (`X-RequestsAvailable` or `X-Requests-Available-Minute`) and reset seconds (`X-RequestCounter-Reset`). A zero counter pauses further uncached calls until reset, before another request hits HTTP 429. Valid cached data remains usable. Invalid/missing quota headers retain the local safeguards; a zero counter without a usable reset gets a conservative one-minute pause. See the [official v4 header reference](https://docs.football-data.org/general/v4/lookup_tables.html).
 - Network errors, 5xx and throttling retry at most three attempts, normally after 60 then 120 seconds. Provider `Retry-After` and local budget reset times take precedence when later. Scheduler polling can add up to a minute of delay.
 - Missing tokens and known nonretryable HTTP failures stop after one attempt. Invalid data and exhausted retries remain visible in task/run history. Stale sync input cannot silently generate a forecast.
 - Each tick processes at most 20 tasks by default, prioritizing sync and then earlier kickoff times. Pending work carries into later ticks.
 
-The queue uses a 90-second SQLite lease renewed every 15 seconds. Another process can resume after expiry. Lease fencing rejects stale worker completions; prediction identity links protect side effects if a process dies after a prediction commits but before task completion is recorded. Hard interruptions retain attempt counts. Lifecycle events and reports are append-only, and terminal tasks/runs cannot be rewritten.
+The queue uses a 90-second database lease renewed every 15 seconds. Another process can resume after expiry. Lease fencing rejects stale worker completions; prediction identity links protect side effects if a process dies after a prediction commits but before task completion is recorded. Hard interruptions retain attempt counts. Lifecycle events and reports are append-only, and terminal tasks/runs cannot be rewritten.
 
 ## Inspect and trigger
 
@@ -63,6 +64,8 @@ The queue uses a 90-second SQLite lease renewed every 15 seconds. Another proces
 | `GET /automation/status` | Enabled/configured state, current policy, next due work, latest run and quota policy |
 | `POST /automation/run` | `{}` creates/reuses the current slot and immediately processes a due batch; returns 202 |
 | `POST /automation/run` | `{ "force": true }` explicitly creates another manual cycle; all provider budgets still apply |
+| `POST /automation/tick` | Creates/reuses the current slot, awaits one bounded batch, and returns its persisted run/status |
+| `GET /shortlist` | Latest future live forecasts ranked by probability, one candidate per fixture; preference filters default on |
 | `GET /automation/runs` | Latest 100 run summaries |
 | `GET /automation/runs/:id` | Tasks, attempts, failures, events and the saved live report |
 
@@ -87,3 +90,29 @@ Schema version 4 adds `automation_runs`, `automation_tasks`, `automation_events`
 The test suite exercises prospective forecast -> repeated cycle -> completed result -> analytics, provider retry delays across coordinator replacement, post-commit crash recovery, expired-worker fencing, kickoff rejection, deadline skips, isolated league failures, shared quotas/cooldowns, application startup/shutdown and the HTTP trigger/status routes. All remote responses/clocks are controlled; those tests do not claim authenticated current coverage from a real account.
 
 Live data still requires the free token. The existing historical database and local model can be used without one, but cannot substitute for a current fixture/result feed.
+
+## Hosted schedule on Render Free
+
+Deploy PostgreSQL application storage first. Confirm authenticated `/capabilities` reports `storage: "postgresql"`, then keep `AUTOMATION_ENABLED=false` in Render: the external job drives persisted batches rather than relying on an always-running process.
+
+The repository includes `.github/workflows/daily-predictions.yml`. Configure GitHub repository settings under **Secrets and variables → Actions**:
+
+| Setting | Kind | Value |
+| --- | --- | --- |
+| `FUTURO_API_URL` | Variable | Your HTTPS Render API origin, without a path |
+| `FUTURO_AUTOMATION_ENABLED` | Variable | `true` after deployment and credentials are ready |
+| `FUTURO_API_ACCESS_TOKEN` | Secret | The same API access token configured in Render |
+
+Keep `FOOTBALL_DATA_TOKEN` and `DATABASE_URL` in Render. The workflow does not need either value. It runs at 00:17, 06:17, 12:17 and 18:17 UTC, or **01:17, 07:17, 13:17 and 19:17 Africa/Lagos**, and supports manual dispatch. It is inactive until the opt-in variable is set.
+
+The runner verifies PostgreSQL storage and provider configuration, tolerates a Render cold start, and calls `/automation/tick` until the current slot finishes. Requests are authenticated and redirects are refused. Workflows do not overlap. Partial/failed runs and a 12-minute retry deadline return a failing job; pending tasks remain in Neon for a later tick. It never forces a fresh slot or bypasses provider cooldowns. Defaults allow up to 15 minutes per GitHub job; check your account's included Actions allowance for private repositories.
+
+Scheduled workflows must be present on GitHub's default branch. Scheduling can be delayed; public repositories can have inactive schedules disabled after 60 days without activity. See [GitHub schedule behavior](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule). This schedule cannot guarantee last-minute coverage before every kickoff.
+
+The same runner can be called from another free scheduler using `FUTURO_API_URL`, `FUTURO_API_ACCESS_TOKEN`, and `npm run automation:hosted`. A single authenticated `POST /automation/tick` also resumes a batch manually.
+
+## Daily shortlist
+
+`GET /shortlist?minProbability=0.65&limit=20&preferenceOnly=true` returns at most one candidate per fixture from its latest saved live forecast. Optional `competition=PL` restricts the league. Started, rescheduled, date-only and blocked fixtures are excluded; a newer rejected forecast cannot fall back to an older successful one. The response includes probabilities, available quotes, form, captured evidence, warnings, and exclusion counts.
+
+The default requires the existing odds/preference filters, so an unpriced forecast will not appear. Use `preferenceOnly=false` to inspect unpriced research candidates. Probabilities remain uncalibrated estimates. Ranking a forecast does not establish a betting edge.

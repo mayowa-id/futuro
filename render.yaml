@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: futuro-api
+    runtime: docker
+    plan: free
+    branch: prod
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/ready
+    envVars:
+      - key: API_ACCESS_TOKEN
+        generateValue: true
+      - key: AUTOMATION_ENABLED
+        value: "false"
