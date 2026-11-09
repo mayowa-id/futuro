@@ -4,7 +4,7 @@ A local, free-data football prediction research API. It imports historical resul
 
 The current model is an **uncalibrated baseline**, not a proven profitable selection system. All scored candidates are labeled `research_only`; passing preference filters is not a confidence guarantee.
 
-Neon schema setup is available: setting `DATABASE_URL` verifies the connection and creates the PostgreSQL tables at startup. **Application storage remains SQLite until the PostgreSQL read/write adapter is implemented.** See [POSTGRES.md](POSTGRES.md) for setup and the authenticated database status check.
+Set `DATABASE_URL` to use Neon PostgreSQL application storage; leave it blank for local SQLite. See [POSTGRES.md](POSTGRES.md) for migrations and status checks, and [AUTOMATION.md](AUTOMATION.md) for the external hosted schedule and daily shortlist.
 
 ## Run locally
 
@@ -161,9 +161,9 @@ The research schema includes normalized football/results/statistics records, exa
 
 Schema version 4 adds persistent scheduled workflow tasks, retry/cooldown state, atomic automatic-prediction deduplication, saved live analytics reports, and save-time kickoff checks. Set the free token and `AUTOMATION_ENABLED=true`, then keep the local services running. No API token is included in the repository.
 
-Docker packaging now starts the compiled API and private Python scorer together, with readiness checks and bearer-token access control. Render Free remains a disposable preview; persistent cloud storage and reliable hosted scheduling remain separate work.
+Docker packaging now starts the compiled API and private Python scorer together, with readiness checks and bearer-token access control. Render Free can now use persistent Neon storage and the opt-in external GitHub schedule. Its local filesystem remains disposable, and missing model files reload from their database copies.
 
-Deferred: frontend, PostgreSQL adapter, Redis/BullMQ workers, automated article/injury/odds ingestion, richer trained features and probability calibration, corner models, secondary-league adapters, bookmaker-specific void handling, and multi-user authentication/roles. SQLite and Python's standard HTTP server keep this local milestone dependency-light; the documented PostgreSQL/FastAPI/queue direction can be introduced as usage requires it.
+Deferred: frontend, Redis/BullMQ workers, automated article/injury/odds ingestion, richer trained features and probability calibration, corner models, secondary-league adapters, bookmaker-specific void handling, and multi-user authentication/roles. SQLite and Python's standard HTTP server keep this local milestone dependency-light; the documented PostgreSQL/FastAPI/queue direction can be introduced as usage requires it.
 
 Less-obvious market hypotheses and published evidence are tracked in [NICHE_MARKET_RESEARCH.md](NICHE_MARKET_RESEARCH.md). They are not silently enabled as proven profitable selections.
 

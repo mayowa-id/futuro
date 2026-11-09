@@ -3,7 +3,7 @@
 Free-data football prediction research API with form analysis, result tracking, and model evaluation.
 
 **Model:** Experimental, uncalibrated baseline; picks remain research candidates.
-**Storage:** SQLite handles application data. Neon tables exist; PostgreSQL reads/writes are next.
+**Storage:** Set `DATABASE_URL` for Neon PostgreSQL; leave it blank for local SQLite.
 
 ## Run locally
 

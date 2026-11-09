@@ -14,7 +14,7 @@ The repository now contains the root `Dockerfile`. It builds the TypeScript API,
 | Docker context | Repository root (`.`) |
 | Docker command | Blank; use the image's default command |
 | Health check | `/health/ready` |
-| Plan | Free for a disposable preview |
+| Plan | Free, with Neon for persistent application data |
 
 There is no separate npm build/start command to enter for Docker deployments. The image runs the compiled API, not the TypeScript development runner. `render.yaml` can create the equivalent service through a Render Blueprint, with an automatically generated API access token; it does not update an existing manually configured service by itself.
 
@@ -24,7 +24,7 @@ Add `API_ACCESS_TOKEN` in Render's Environment settings. Generate a separate ran
 
 Add `FOOTBALL_DATA_TOKEN` separately if you want to test fetching football data. The image does not contain either secret. Use Render Environment settings rather than committed `.env` files or Docker build arguments.
 
-Optional `DATABASE_URL` now connects to Neon and creates the PostgreSQL schema at startup. A connection or migration failure prevents startup. This is **schema setup only**: application reads/writes still use SQLite. Verify the fresh connection through the authenticated `/database/status` endpoint; a successful deployment of an older commit that ignored the variable did not verify Neon. See [POSTGRES.md](POSTGRES.md) for the expected log/status output and the remaining storage adapter work.
+Set `DATABASE_URL` to use Neon PostgreSQL for application storage. Startup verifies the connection and applies pending migrations, and refuses to start on failure. Confirm `/capabilities` reports `storage: "postgresql"`, and use authenticated `/database/status` for a fresh connection check. See [POSTGRES.md](POSTGRES.md). Existing local SQLite history is not copied automatically.
 
 The Docker image already provides these defaults, so existing equivalent values can remain:
 
@@ -45,7 +45,7 @@ After committing/pushing the deployment files to the selected branch, choose **M
 
 ## Access the API
 
-`GET /health` and `GET /health/ready` are public health probes. Readiness checks the local database and Python scoring endpoint.
+`GET /health` and `GET /health/ready` are public health probes. Readiness checks the configured database and Python scoring endpoint.
 
 All other routes require:
 
@@ -65,9 +65,9 @@ For local development, localhost without `API_ACCESS_TOKEN` remains available. P
 
 ## Free preview storage and scheduling
 
-Render Free sleeps on inactivity and does not provide a persistent disk. Its filesystem, including this SQLite database and model files, is disposable across restarts/redeploys. Keep `AUTOMATION_ENABLED=false` on this preview. Do not upload the local research database expecting Render Free to retain it.
+Render Free sleeps on inactivity and does not provide a persistent disk. Set `DATABASE_URL` so application history, provider caches/budgets, models and workflow state persist in Neon. With no URL, SQLite remains disposable on Render. Missing model files can be recreated from their database copies; existing corrupted artifacts fail integrity checks.
 
-For a durable free deployment, the application still needs PostgreSQL repositories, model-file recovery from stored artifacts, and external scheduling. The Neon schema is prepared, but it does not yet receive application writes. This packaging does not change the $0 budget or select a paid disk. Continue collecting valuable history locally until persistence is implemented for the chosen host.
+Keep `AUTOMATION_ENABLED=false` on Render and configure the opt-in external GitHub schedule in [AUTOMATION.md](AUTOMATION.md). It resumes durable batches every six hours, including cold starts, retries, settlement and reports. GitHub schedule timing is best effort, so it cannot guarantee coverage immediately before every kickoff.
 
 Official references: [Docker settings](https://render.com/docs/docker), [port binding](https://render.com/docs/web-services#port-binding), [Free limitations](https://render.com/docs/free).
 

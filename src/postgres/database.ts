@@ -1,8 +1,19 @@
 import { createHash } from 'node:crypto';
 import { Client, ClientConfig } from 'pg';
 import { initialSchema } from './schema';
+import { ingestionSchema } from './ingestion';
 
-const migrations = [{ version: 1, name: 'football research and prediction history', sql: initialSchema }];
+const migrations = [
+  { version: 1, name: 'football research and prediction history', sql: initialSchema },
+  { version: 2, name: 'stable ordering for PostgreSQL application storage', sql: `
+    ALTER TABLE __SCHEMA__.prediction_runs ADD COLUMN record_seq BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE;
+    ALTER TABLE __SCHEMA__.candidate_settlements ADD COLUMN record_seq BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE;
+    ALTER TABLE __SCHEMA__.evidence_observations ADD COLUMN record_seq BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE;
+    ALTER TABLE __SCHEMA__.automation_runs ADD COLUMN record_seq BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE;
+    ALTER TABLE __SCHEMA__.automation_tasks ADD COLUMN record_seq BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE;
+  ` },
+  { version: 3, name: 'bulk football ingestion', sql: ingestionSchema },
+];
 export const postgresVersion = migrations.at(-1)!.version;
 
 export function postgresConfig(value: string): ClientConfig {
@@ -27,7 +38,7 @@ export interface PostgresStatus {
   expectedVersion: number;
   tableCount: number;
   migrationsCurrent: boolean;
-  applicationStorage: 'sqlite-local';
+  applicationStorage: 'postgresql';
 }
 
 function checksum(sql: string) { return createHash('sha256').update(sql).digest('hex'); }
@@ -112,6 +123,6 @@ export class PostgresSchema {
     return { configured: true, connected: true, schema: this.schema, version, expectedVersion: postgresVersion,
       tableCount: Number(count.rows[0].count), migrationsCurrent: applied.length === migrations.length &&
         applied.every(row => migrations.some(m => m.version === row.version && checksum(m.sql) === row.checksum)),
-      applicationStorage: 'sqlite-local' };
+      applicationStorage: 'postgresql' };
   }
 }

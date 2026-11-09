@@ -1,0 +1,33 @@
+name: Daily football predictions
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 0,6,12,18 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: futuro-daily-predictions
+  cancel-in-progress: false
+
+jobs:
+  predict-and-settle:
+    # Opt in after deploying PostgreSQL storage and configuring the API secrets.
+    if: vars.FUTURO_AUTOMATION_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Resume fixture imports, predictions, settlements and reports
+        env:
+          FUTURO_API_URL: ${{ vars.FUTURO_API_URL }}
+          FUTURO_API_ACCESS_TOKEN: ${{ secrets.FUTURO_API_ACCESS_TOKEN }}
+        run: node scripts/hosted-run.mjs

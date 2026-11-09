@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "start": "node dist/main.js",
     "smoke:production": "node scripts/smoke-production.mjs",
-    "test": "tsx --test test/*.test.ts",
+    "test": "tsx --test test/*.test.ts && node --test test/*.test.mjs",
     "demo": "tsx scripts/demo.ts",
     "import:openfootball": "tsx scripts/import.ts",
     "backtest": "tsx scripts/backtest.ts",
@@ -17,7 +17,8 @@
     "db:migrate": "node dist/postgres/cli.js migrate",
     "db:status": "node dist/postgres/cli.js status",
     "train": "tsx scripts/train.ts",
-    "automation:once": "tsx scripts/automation.ts"
+    "automation:once": "tsx scripts/automation.ts",
+    "automation:hosted": "node scripts/hosted-run.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",
