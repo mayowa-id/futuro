@@ -34,3 +34,14 @@ export class AccessGuard implements CanActivate {
     return true;
   }
 }
+
+export function frontendOrigins(value: string | undefined): string[] {
+  return [...new Set((value ?? '').split(',').map(v => v.trim()).filter(Boolean))].map(origin => {
+    let url: URL;
+    try { url = new URL(origin); } catch { throw new Error('FRONTEND_ORIGINS must contain comma-separated frontend origins'); }
+    const local = ['localhost','127.0.0.1','[::1]'].includes(url.hostname);
+    if ((url.protocol !== 'https:' && !(local && url.protocol === 'http:')) || url.origin !== origin || url.hostname.includes('*') || url.username || url.password)
+      throw new Error('FRONTEND_ORIGINS must contain exact HTTPS origins (HTTP allowed for localhost)');
+    return url.origin;
+  });
+}
