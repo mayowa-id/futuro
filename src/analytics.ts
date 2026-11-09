@@ -7,6 +7,8 @@ export interface EvaluationRow {
     fixtureId: string;
     competition: string;
     kickoff: string;
+    home?: string;
+    away?: string;
     cutoff: string;
     market: string;
     modelId: string;
@@ -91,10 +93,11 @@ export function report(rows: EvaluationRow[]) {
         byMarket: grouped(rows, r => r.market), byCompetition: grouped(rows, r => r.competition),
         byModel: grouped(rows, r => r.modelId), byMonth: grouped(rows, r => r.kickoff.slice(0, 7)),
         byCorroboration: grouped(rows, r => r.corroboration),
+        byProbabilityBand: grouped(rows, r => r.probability < .6 ? 'below_60%' : r.probability < .7 ? '60_to_below_70%' : r.probability < .8 ? '70_to_below_80%' : r.probability < .9 ? '80_to_below_90%' : '90%_and_above'),
         byInjuryEvidence: grouped(rows, r => r.hasInjuryEvidence ? 'recorded' : 'missing'),
         byOddsBand: grouped(rows, r => r.odds === null ? 'unpriced' : r.odds < 1.2 ? 'below_1.20' : r.odds < 1.5 ? '1.20_to_below_1.50' : r.odds <= 1.8 ? '1.50_to_1.80' : 'above_1.80'),
         largestErrors: [...rows].sort((a, b) => (b.outcome - b.probability) ** 2 - (a.outcome - a.probability) ** 2).slice(0, 20)
-            .map(r => ({ predictionId: r.predictionId, fixtureId: r.fixtureId, market: r.market, modelId: r.modelId,
+            .map(r => ({ predictionId: r.predictionId, fixtureId: r.fixtureId, home: r.home ?? null, away: r.away ?? null, market: r.market, modelId: r.modelId,
             probability: r.probability, outcome: r.outcome, residual: r.outcome - r.probability,
             squaredError: (r.outcome - r.probability) ** 2, corroboration: r.corroboration, hasInjuryEvidence: Boolean(r.hasInjuryEvidence) })),
         limitations: ['Markets on one fixture are correlated; candidate count is not independent match count',
@@ -116,13 +119,14 @@ export class Analytics {
       JOIN match_results mr ON mr.revision_id=cs.result_revision_id
       WHERE mr.status='finished' AND mr.home_goals IS NOT NULL AND mr.away_goals IS NOT NULL
     ) SELECT c.id AS candidateId, cs.id AS settlementId, p.id AS predictionId, p.fixture_id AS fixtureId,
-      se.competition_id AS competition, fc.kickoff, p.cutoff, c.market_id AS market, p.model_id AS modelId,
+      se.competition_id AS competition, fc.kickoff, t_home.display_name AS home, t_away.display_name AS away, p.cutoff, c.market_id AS market, p.model_id AS modelId,
       mv.label AS modelLabel,c.probability,cs.outcome,q.decimal_odds AS odds,cs.profit,cs.stake,
       c.preference_passed AS preferencePassed,c.corroboration,p.has_injury_evidence AS hasInjuryEvidence,
       cs.result_revision_id AS resultRevisionId
       FROM ranked p JOIN market_candidates c ON c.prediction_id=p.id
       JOIN settled cs ON cs.candidate_id=c.id AND cs.n=1
       JOIN fixture_catalog fc ON fc.id=p.fixture_id JOIN seasons se ON se.id=fc.season_id
+      JOIN teams t_home ON t_home.id=fc.home_team_id JOIN teams t_away ON t_away.id=fc.away_team_id
       JOIN model_versions mv ON mv.id=p.model_id LEFT JOIN odds_quotes q ON q.id=c.quote_id
       WHERE p.n=1 AND (? IS NULL OR c.market_id=?) AND (? IS NULL OR se.competition_id=?)
       AND (?='all' OR c.preference_passed=1)

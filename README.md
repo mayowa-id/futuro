@@ -21,7 +21,7 @@ In a second terminal:
 npm run dev
 ```
 
-API: `http://127.0.0.1:3000` · Python scorer: `http://127.0.0.1:8001`.
+API: `http://127.0.0.1:3000` · Frontend: `npm --prefix frontend run dev` (see its setup guide).
 Set `FOOTBALL_DATA_TOKEN` for current fixtures and `API_ACCESS_TOKEN` for production access.
 Keep secrets in environment settings or ignored `.env` files.
 
@@ -34,7 +34,7 @@ Keep secrets in environment settings or ignored `.env` files.
 
 ## Guides
 
-- [Usage and API](USAGE.md) · [Render deployment](RENDER_DEPLOYMENT.md) · [Neon setup](POSTGRES.md)
+- [Frontend / Vercel](frontend/README.md) · [Dashboard](DASHBOARD.md) · [Render API](RENDER_DEPLOYMENT.md) · [Neon setup](POSTGRES.md)
 - [Database design](SCHEMA.md) · [Training](TRAINING.md) · [Automation](AUTOMATION.md)
 - [Free data](FREE_DATA_PLAN.md) · [Market research](NICHE_MARKET_RESEARCH.md)
 - [Requirements](REQUIREMENTS.md) · [Implementation plan](IMPLEMENTATION_PLAN.md)

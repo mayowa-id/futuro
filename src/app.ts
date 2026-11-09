@@ -14,6 +14,7 @@ import { Automation } from './automation';
 import { AccessGuard } from './access';
 import { PostgresSchema, postgresVersion } from './postgres/database';
 import { shortlist } from './shortlist';
+import { frontendOrigins } from './access';
 @Catch()
 class ApiErrors implements ExceptionFilter {
     catch(error: unknown, host: ArgumentsHost) {
@@ -227,6 +228,7 @@ class ApiController {
 export async function createApp(store: Store, futuro = new Futuro(store), training = new Training(store), automation = new Automation(store, futuro, new Providers(store), training), security: {
     apiAccessToken?: string;
     postgres?: PostgresSchema;
+    frontendOrigins?: string[];
 } = {}) {
     @Module({ controllers: [ApiController], providers: [
             { provide: 'FUTURO', useValue: futuro }, { provide: 'PROVIDERS', useValue: new Providers(store) }, { provide: 'TRAINING', useValue: training },
@@ -237,6 +239,9 @@ export async function createApp(store: Store, futuro = new Futuro(store), traini
     class AppModule {
     }
     const app = await NestFactory.create(AppModule, { logger: ['error', 'warn'], bodyParser: true });
+    const allowedOrigins = frontendOrigins(security.frontendOrigins?.join(',') ?? process.env.FRONTEND_ORIGINS);
+    app.enableCors({ origin: allowedOrigins, methods: ['GET','HEAD','OPTIONS'], allowedHeaders: ['Authorization','Content-Type'],
+        credentials: false, maxAge: 600 });
     app.useGlobalFilters(new ApiErrors());
     app.useGlobalGuards(new AccessGuard(security.apiAccessToken));
     app.enableShutdownHooks();
