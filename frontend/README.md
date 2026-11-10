@@ -17,7 +17,7 @@ Import the existing GitHub repository as a **new Vercel project**:
 
 `vercel.json` already declares the build command, output directory and security headers. The frontend has its own package/lockfile and needs no access to files outside its root. `PUBLIC_API_URL` is intentionally public; it is the API origin only, without a path, username, password or query string. Changing it requires a new frontend build.
 
-After Vercel gives you the production URL, set this on **Render**, without a trailing slash:
+After Vercel gives you the production URL, set this on **Render** (a trailing slash is accepted and normalized):
 
 ```dotenv
 FRONTEND_ORIGINS=https://YOUR-PROJECT.vercel.app

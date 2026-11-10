@@ -45,7 +45,7 @@ After committing/pushing the deployment files to the selected branch, choose **M
 
 ## Access the API
 
-The independent `frontend/` project deploys on Vercel. Set `FRONTEND_ORIGINS` on Render to its exact HTTPS origin (no trailing slash), then redeploy the API. The API does not serve frontend assets. Data requests still require the existing bearer token; CORS permits only the explicitly configured frontend origins. See [frontend deployment](frontend/README.md).
+The independent `frontend/` project deploys on Vercel. Set `FRONTEND_ORIGINS` on Render to its HTTPS frontend URL, then redeploy the API. A trailing slash is accepted and normalized; paths, query strings, credentials and wildcards are rejected. The API does not serve frontend assets. Data requests still require the existing bearer token; CORS permits only the explicitly configured frontend origins. See [frontend deployment](frontend/README.md).
 
 `GET /health` and `GET /health/ready` are public health probes. Readiness checks the configured database and Python scoring endpoint.
 

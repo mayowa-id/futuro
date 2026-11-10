@@ -30,7 +30,7 @@ const token = randomBytes(32).toString('hex');
 const environment = { ...process.env, NODE_ENV: 'production', HOST: '127.0.0.1', PORT: String(apiPort),
   MODEL_PORT: String(modelPort), MODEL_URL: `http://127.0.0.1:${modelPort}`, API_ACCESS_TOKEN: token,
   DATABASE_PATH: join(directory, 'smoke.sqlite'), DATABASE_URL: '', ARTIFACT_DIRECTORY: join(directory, 'artifacts'),
-  FOOTBALL_DATA_TOKEN: '', AUTOMATION_ENABLED: 'false' };
+  FRONTEND_ORIGINS: 'https://futuro-smoke.vercel.app/', FOOTBALL_DATA_TOKEN: '', AUTOMATION_ENABLED: 'false' };
 let model, api, logs = '';
 const launch = (exe, args) => {
   const child = spawn(exe, args, { env: environment, windowsHide: true, stdio: ['ignore','pipe','pipe'] });
@@ -52,6 +52,10 @@ try {
   }
   assert.ok(ready, `Production processes did not become ready: ${logs}`);
   assert.equal((await fetch(`${base}/fixtures`)).status, 401);
+  const preflight = await fetch(`${base}/analytics`, { method: 'OPTIONS', headers: {
+    Origin: 'https://futuro-smoke.vercel.app', 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization',
+  } });
+  assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://futuro-smoke.vercel.app');
   const authorized = await fetch(`${base}/capabilities`, { headers: { Authorization: `Bearer ${token}` } });
   assert.equal(authorized.status, 200);
   assert.equal((await authorized.json()).scheduledSync, false);

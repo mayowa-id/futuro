@@ -36,12 +36,14 @@ export class AccessGuard implements CanActivate {
 }
 
 export function frontendOrigins(value: string | undefined): string[] {
-  return [...new Set((value ?? '').split(',').map(v => v.trim()).filter(Boolean))].map(origin => {
+  const error = () => new Error('Set FRONTEND_ORIGINS to your frontend URL, e.g. https://your-project.vercel.app (comma-separated; no paths, query strings, credentials or wildcards; HTTP allowed for localhost)');
+  const origins = (value ?? '').split(',').map(v => v.trim()).filter(Boolean).map(origin => {
     let url: URL;
-    try { url = new URL(origin); } catch { throw new Error('FRONTEND_ORIGINS must contain comma-separated frontend origins'); }
+    try { url = new URL(origin); } catch { throw error(); }
     const local = ['localhost','127.0.0.1','[::1]'].includes(url.hostname);
-    if ((url.protocol !== 'https:' && !(local && url.protocol === 'http:')) || url.origin !== origin || url.hostname.includes('*') || url.username || url.password)
-      throw new Error('FRONTEND_ORIGINS must contain exact HTTPS origins (HTTP allowed for localhost)');
+    if ((url.protocol !== 'https:' && !(local && url.protocol === 'http:')) || url.pathname !== '/' || url.search || url.hash || url.hostname.includes('*') || url.username || url.password)
+      throw error();
     return url.origin;
   });
+  return [...new Set(origins)];
 }

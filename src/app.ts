@@ -230,6 +230,7 @@ export async function createApp(store: Store, futuro = new Futuro(store), traini
     postgres?: PostgresSchema;
     frontendOrigins?: string[];
 } = {}) {
+    const allowedOrigins = frontendOrigins(security.frontendOrigins?.join(',') ?? process.env.FRONTEND_ORIGINS);
     @Module({ controllers: [ApiController], providers: [
             { provide: 'FUTURO', useValue: futuro }, { provide: 'PROVIDERS', useValue: new Providers(store) }, { provide: 'TRAINING', useValue: training },
             { provide: 'AUTOMATION', useValue: automation },
@@ -239,7 +240,6 @@ export async function createApp(store: Store, futuro = new Futuro(store), traini
     class AppModule {
     }
     const app = await NestFactory.create(AppModule, { logger: ['error', 'warn'], bodyParser: true });
-    const allowedOrigins = frontendOrigins(security.frontendOrigins?.join(',') ?? process.env.FRONTEND_ORIGINS);
     app.enableCors({ origin: allowedOrigins, methods: ['GET','HEAD','OPTIONS'], allowedHeaders: ['Authorization','Content-Type'],
         credentials: false, maxAge: 600 });
     app.useGlobalFilters(new ApiErrors());

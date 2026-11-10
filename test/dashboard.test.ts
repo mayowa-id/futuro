@@ -93,7 +93,8 @@ test('independent frontend stays public while API authentication and exact-origi
 test('frontend origin configuration accepts exact trusted origins and rejects broad or credentialed URLs',()=>{
   assert.deepEqual(frontendOrigins(undefined),[]);
   assert.deepEqual(frontendOrigins('https://futuro.vercel.app,http://localhost:4173,https://futuro.vercel.app'),['https://futuro.vercel.app','http://localhost:4173']);
-  for(const value of ['*','https://*.vercel.app','https://user:password@example.com','http://example.com','https://example.com/path'])
+  assert.deepEqual(frontendOrigins(' https://FUTURO.vercel.app/ , https://futuro.vercel.app:443, http://localhost:4173/ '),['https://futuro.vercel.app','http://localhost:4173']);
+  for(const value of ['*','https://*.vercel.app','https://user:password@example.com','http://example.com','https://example.com/path','https://example.com/?token=secret','https://example.com/#section'])
     assert.throws(()=>frontendOrigins(value),/FRONTEND_ORIGINS/);
 });
 
