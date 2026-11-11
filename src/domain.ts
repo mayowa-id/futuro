@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { competitionCodes } from './competitions';
 
-export const competitionSchema = z.enum(['PL', 'PD', 'BL1', 'SA', 'FL1', 'PPL']);
+export const competitionSchema = z.enum(competitionCodes);
 export const modeSchema = z.enum(['live', 'historical', 'demo']);
 export type Mode = z.infer<typeof modeSchema>;
 export type PredictionTracking = { key: string; kickoff: string; modelRef: string; policyVersion: string };
@@ -15,8 +16,11 @@ export const fixtureSchema = z.object({
   home: z.string().min(1), away: z.string().min(1), homeKey: z.string(), awayKey: z.string(),
   kickoff: timestamp, dateOnly: z.boolean(),
   status: z.enum(['scheduled', 'finished', 'postponed', 'cancelled', 'in_progress']),
-  score: scoreSchema.nullable(), provider: z.enum(['openfootball', 'football-data', 'demo']),
+  score: scoreSchema.nullable(), provider: z.enum(['openfootball', 'football-data', 'espn', 'demo']),
   sourceId: z.string(), observedAt: timestamp,
+  stage: z.string().optional(), group: z.string().nullable().optional(), matchday: z.number().int().nullable().optional(),
+  neutralSite: z.boolean().optional(), homeProviderId: z.string().optional(), awayProviderId: z.string().optional(),
+  regulationStatus: z.enum(['known','unavailable','not_finished']).optional(),
 });
 export type Fixture = z.infer<typeof fixtureSchema>;
 export type Evidence = {
