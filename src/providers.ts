@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { competitionSchema, Fixture, fixtureId, fixtureSchema, scoreSchema, teamKey } from './domain';
 import { Store } from './store';
 import { RetryableError, retryAfter, quotaResetAt } from './errors';
+import { competitions, isTournament } from './competitions';
+import { compactEspn, normalizeEspn } from './tournaments';
 export const openLeagues = { PL: 'en.1', PD: 'es.1', BL1: 'de.1', SA: 'it.1', FL1: 'fr.1', PPL: 'pt.1' } as const;
 export const seasonSchema = z.string().regex(/^20\d{2}-\d{2}$/).refine(s => Number(s.slice(5)) === (Number(s.slice(0, 4)) + 1) % 100, 'Season must be consecutive, e.g. 2024-25');
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s => !Number.isNaN(Date.parse(s)) && new Date(s).toISOString().slice(0, 10) === s, 'Invalid date');
@@ -23,6 +25,8 @@ export function aliases(): Record<string, string> {
     return JSON.parse(readFileSync('config/team-aliases.json', 'utf8'));
 }
 export function normalizeOpen(raw: unknown, competition: z.infer<typeof competitionSchema>, season: string, capturedAt: string, aliasMap: Record<string, string> = {}): Fixture[] {
+    if (!(competition in openLeagues)) throw new Error('OpenFootball adapter supports domestic leagues only; use the tournament feed');
+    const league = openLeagues[competition as keyof typeof openLeagues];
     const input = openSchema.parse(raw);
     return input.matches.map((m) => {
         const homeKey = teamKey(m.team1, aliasMap), awayKey = teamKey(m.team2, aliasMap);
@@ -31,7 +35,7 @@ export function normalizeOpen(raw: unknown, competition: z.infer<typeof competit
         return fixtureSchema.parse({ id: fixtureId(competition, season, homeKey, awayKey), competition, season,
             home: m.team1, away: m.team2, homeKey, awayKey, kickoff: `${m.date}T00:00:00.000Z`, dateOnly: true,
             status: m.score?.ft ? 'finished' : 'scheduled', score: m.score?.ft ?? null,
-            provider: 'openfootball', sourceId: `${season}/${openLeagues[competition]}:${homeKey}:${awayKey}`, observedAt: capturedAt });
+            provider: 'openfootball', sourceId: `${season}/${league}:${homeKey}:${awayKey}`, observedAt: capturedAt });
     });
 }
 export function normalizeFootballData(raw: unknown, capturedAt: string, aliasMap: Record<string, string> = {}): Fixture[] {
@@ -44,9 +48,11 @@ export function normalizeFootballData(raw: unknown, capturedAt: string, aliasMap
         const regulation = m.score.duration === 'REGULAR' ? m.score.fullTime : m.score.regularTime;
         const score = m.status === 'FINISHED' && regulation?.home != null && regulation?.away != null ? scoreSchema.parse([regulation.home, regulation.away]) : null;
         const status = m.status === 'FINISHED' ? 'finished' : ['POSTPONED', 'SUSPENDED'].includes(m.status) ? 'postponed' : ['CANCELLED', 'AWARDED'].includes(m.status) ? 'cancelled' : ['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'].includes(m.status) ? 'in_progress' : 'scheduled';
-        return fixtureSchema.parse({ id: fixtureId(m.competition.code, season, homeKey, awayKey), competition: m.competition.code, season,
+        return fixtureSchema.parse({ id: isTournament(m.competition.code) ? fixtureId(m.competition.code, 'football-data', String(m.id), '') : fixtureId(m.competition.code, season, homeKey, awayKey), competition: m.competition.code, season,
             home: m.homeTeam.name, away: m.awayTeam.name, homeKey, awayKey, kickoff: m.utcDate, dateOnly: false,
-            status, score, provider: 'football-data', sourceId: String(m.id), observedAt: capturedAt });
+            status, score, provider: 'football-data', sourceId: String(m.id), observedAt: capturedAt,
+            ...(isTournament(m.competition.code) ? {stage:m.stage,group:m.group,matchday:m.matchday,neutralSite:m.stage==='FINAL',
+              homeProviderId:String(m.homeTeam.id),awayProviderId:String(m.awayTeam.id),regulationStatus:score?'known':status==='finished'?'unavailable':'not_finished'} : {}) });
     });
 }
 export class Providers {
@@ -54,7 +60,7 @@ export class Providers {
         fetch?: typeof fetch;
         now?: () => Date;
     } = {}) { }
-    private async request(provider: string, url: string, headers: Record<string, string>, ttlMs: number) {
+    private async request(provider: string, url: string, headers: Record<string, string>, ttlMs: number, compact?: (raw: unknown)=>unknown) {
         const requestedAt = (this.options.now?.() ?? new Date()).toISOString();
         const cache = await this.store.cache(url, ttlMs, Date.parse(requestedAt));
         if (cache)
@@ -89,20 +95,23 @@ export class Providers {
                 await this.store.setProviderCooldown(provider, retryAt);
             throw new RetryableError(`${provider} returned HTTP ${response.status}. Check free entitlement or retry later.`, response.status === 429 || response.status >= 500, retryAt);
         }
-        const payload: unknown = await response.json();
+        const body: unknown = await response.json();
+        const payload: unknown = compact ? compact(body) : body;
         const capturedAt = (this.options.now?.() ?? new Date()).toISOString();
         await this.store.putCache(url, capturedAt, payload);
         return { payload, capturedAt, cached: false };
     }
     async importOpen(competition: z.infer<typeof competitionSchema>, season: string) {
         seasonSchema.parse(season);
-        const url = `https://raw.githubusercontent.com/openfootball/football.json/master/${season}/${openLeagues[competition]}.json`;
+        if (!(competition in openLeagues)) throw new Error('OpenFootball adapter supports domestic leagues only; use the tournament feed');
+        const url = `https://raw.githubusercontent.com/openfootball/football.json/master/${season}/${openLeagues[competition as keyof typeof openLeagues]}.json`;
         const response = await this.request('openfootball', url, {}, 24 * 3600000);
         const fixtures = normalizeOpen(response.payload, competition, season, response.capturedAt, aliases());
         await this.store.ingest('openfootball', response.capturedAt, response.payload, fixtures);
         return { imported: fixtures.length, cached: response.cached, provider: 'openfootball', capturedAt: response.capturedAt, datePrecision: 'day' };
     }
     async syncFootballData(competition: z.infer<typeof competitionSchema>) {
+        if (competitions[competition].provider !== 'football-data') throw new RetryableError('Use the configured tournament feed for this competition',false);
         const token = process.env.FOOTBALL_DATA_TOKEN;
         if (!token)
             throw new RetryableError('Configure a free FOOTBALL_DATA_TOKEN in .env.', false);
@@ -110,6 +119,24 @@ export class Providers {
         const fixtures = normalizeFootballData(response.payload, response.capturedAt, aliases());
         await this.store.ingest('football-data', response.capturedAt, response.payload, fixtures);
         return { imported: fixtures.length, cached: response.cached, provider: 'football-data', capturedAt: response.capturedAt };
+    }
+    async syncCompetition(competition: z.infer<typeof competitionSchema>) {
+        const definition=competitions[competition];
+        if (definition.provider==='football-data') return this.syncFootballData(competition);
+        const now=this.options.now?.()??new Date(), year=now.getUTCFullYear();
+        const years=[year-1,year];
+        if (now.getUTCMonth()===11 && now.getUTCDate()>=28) years.push(year+1);
+        let imported=0,cached=true;
+        const captures: string[]=[];
+        for (const y of years) {
+            const url=`https://site.api.espn.com/apis/site/v2/sports/soccer/${definition.slug}/scoreboard?dates=${y}&limit=1000`;
+            const response=await this.request('espn',url,{},(y<year?7*24:6)*3600_000,compactEspn);
+            const fixtures=normalizeEspn(response.payload,competition,response.capturedAt,aliases());
+            await this.store.ingest('espn',response.capturedAt,{format:'espn-football-extract-v1',url,data:response.payload},fixtures);
+            imported+=fixtures.length;cached=cached&&response.cached;
+            if(y>=year)captures.push(response.capturedAt);
+        }
+        return {imported,cached,provider:'espn',capturedAt:captures.sort()[0]};
     }
     async standings(competition: z.infer<typeof competitionSchema>) {
         const token = process.env.FOOTBALL_DATA_TOKEN;
