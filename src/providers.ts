@@ -14,10 +14,11 @@ const openSchema = z.object({ name: z.string(), matches: z.array(z.object({
     })) });
 const fdSchema = z.object({ matches: z.array(z.object({
         id: z.number().int(), utcDate: z.string().datetime(), status: z.string(), lastUpdated: z.string().optional(),
-        homeTeam: z.object({ id: z.number(), name: z.string().min(1) }),
-        awayTeam: z.object({ id: z.number(), name: z.string().min(1) }),
-        season: z.object({ startDate: dateSchema }),
+        homeTeam: z.object({ id: z.number().nullable().optional(), name: z.string().min(1).nullable().optional() }),
+        awayTeam: z.object({ id: z.number().nullable().optional(), name: z.string().min(1).nullable().optional() }),
+        season: z.object({ startDate: dateSchema, endDate: dateSchema.optional() }),
         competition: z.object({ code: competitionSchema }),
+        stage:z.string().optional(),group:z.string().nullable().optional(),matchday:z.number().int().nullable().optional(),
         score: z.object({ duration: z.string(), fullTime: z.object({ home: z.number().nullable(), away: z.number().nullable() }),
             regularTime: z.object({ home: z.number().nullable(), away: z.number().nullable() }).optional() }),
     })) });
@@ -39,20 +40,24 @@ export function normalizeOpen(raw: unknown, competition: z.infer<typeof competit
     });
 }
 export function normalizeFootballData(raw: unknown, capturedAt: string, aliasMap: Record<string, string> = {}): Fixture[] {
-    return fdSchema.parse(raw).matches.map(m => {
+    return fdSchema.parse(raw).matches.flatMap(m => {
+        if (!m.homeTeam.name || !m.awayTeam.name || !m.homeTeam.id || !m.awayTeam.id || /^(TBD|To be determined)$/i.test(m.homeTeam.name) || /^(TBD|To be determined)$/i.test(m.awayTeam.name)) {
+            if(m.status==='FINISHED')throw new Error('Completed fixture has unresolved teams');
+            return [];
+        }
         const year = Number(m.season.startDate.slice(0, 4));
-        const season = `${year}-${String((year + 1) % 100).padStart(2, '0')}`;
+        const season = isTournament(m.competition.code) && m.season.endDate?.slice(0,4)===String(year)?String(year):`${year}-${String((year + 1) % 100).padStart(2, '0')}`;
         const homeKey = teamKey(m.homeTeam.name, aliasMap), awayKey = teamKey(m.awayTeam.name, aliasMap);
         if (homeKey === awayKey)
             throw new Error('A fixture cannot have the same team on both sides.');
         const regulation = m.score.duration === 'REGULAR' ? m.score.fullTime : m.score.regularTime;
         const score = m.status === 'FINISHED' && regulation?.home != null && regulation?.away != null ? scoreSchema.parse([regulation.home, regulation.away]) : null;
         const status = m.status === 'FINISHED' ? 'finished' : ['POSTPONED', 'SUSPENDED'].includes(m.status) ? 'postponed' : ['CANCELLED', 'AWARDED'].includes(m.status) ? 'cancelled' : ['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'].includes(m.status) ? 'in_progress' : 'scheduled';
-        return fixtureSchema.parse({ id: isTournament(m.competition.code) ? fixtureId(m.competition.code, 'football-data', String(m.id), '') : fixtureId(m.competition.code, season, homeKey, awayKey), competition: m.competition.code, season,
+        return [fixtureSchema.parse({ id: isTournament(m.competition.code) ? fixtureId(m.competition.code, 'football-data', String(m.id), '') : fixtureId(m.competition.code, season, homeKey, awayKey), competition: m.competition.code, season,
             home: m.homeTeam.name, away: m.awayTeam.name, homeKey, awayKey, kickoff: m.utcDate, dateOnly: false,
             status, score, provider: 'football-data', sourceId: String(m.id), observedAt: capturedAt,
             ...(isTournament(m.competition.code) ? {stage:m.stage,group:m.group,matchday:m.matchday,neutralSite:m.stage==='FINAL',
-              homeProviderId:String(m.homeTeam.id),awayProviderId:String(m.awayTeam.id),regulationStatus:score?'known':status==='finished'?'unavailable':'not_finished'} : {}) });
+              homeProviderId:String(m.homeTeam.id),awayProviderId:String(m.awayTeam.id),regulationStatus:score?'known':status==='finished'?'unavailable':'not_finished'} : {}) })];
     });
 }
 export class Providers {

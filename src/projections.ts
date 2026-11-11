@@ -1,6 +1,6 @@
 import { Database } from './database';
 import { Evidence, Fixture, hash, marketSchema } from './domain';
-const names: Record<string, string> = { PL: 'Premier League', PD: 'La Liga', BL1: 'Bundesliga', SA: 'Serie A', FL1: 'Ligue 1', PPL: 'Primeira Liga' };
+import { competitions } from './competitions';
 export const teamId = (f: Fixture, side: 'home' | 'away') => hash([f.competition, f[`${side}Key`]]);
 export async function seedMarkets(db: Database) {
     for (const market of marketSchema.options) {
@@ -12,7 +12,7 @@ export async function seedMarkets(db: Database) {
 }
 export async function projectFixture(db: Database, f: Fixture, revisionId: number) {
     const seasonId = hash([f.competition, f.season]);
-    await db.prepare('INSERT OR IGNORE INTO competitions VALUES (?,?)').run(f.competition, names[f.competition] ?? f.competition);
+    await db.prepare('INSERT OR IGNORE INTO competitions VALUES (?,?)').run(f.competition, competitions[f.competition].name);
     await db.prepare('INSERT OR IGNORE INTO seasons VALUES (?,?,?)').run(seasonId, f.competition, f.season);
     for (const side of ['home', 'away'] as const)
         await db.prepare('INSERT OR IGNORE INTO teams VALUES (?,?,?,?)').run(teamId(f, side), f.competition, f[`${side}Key`], f[side]);

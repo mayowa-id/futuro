@@ -4,7 +4,7 @@
   const state = { token: '', report: null, generation: 0, controller: null, connected: false };
   const apiOrigin = window.FUTURO_CONFIG?.apiUrl;
   const marketNames = { home_win: 'Home win', away_win: 'Away win', over_1_5: 'Over 1.5 goals', over_2_5: 'Over 2.5 goals', home_win_or_over_2_5: 'Home win or over 2.5', away_win_or_over_2_5: 'Away win or over 2.5' };
-  const leagues = { PL: 'Premier League', PD: 'La Liga', BL1: 'Bundesliga', SA: 'Serie A', FL1: 'Ligue 1', PPL: 'Primeira Liga' };
+  const leagues = { PL: 'Premier League', PD: 'La Liga', BL1: 'Bundesliga', SA: 'Serie A', FL1: 'Ligue 1', PPL: 'Primeira Liga', CL: 'Champions League', EL: 'Europa League', ECL: 'Conference League', UNL: 'Nations League', WC: 'World Cup', EC: 'European Championship', WCQ_EU: 'World Cup qualifying - UEFA', FAC: 'FA Cup', EFL: 'EFL Cup', DFB: 'DFB-Pokal', CDR: 'Copa del Rey', CI: 'Coppa Italia' };
   const numeric = value => typeof value === 'number' && Number.isFinite(value);
   const pct = value => numeric(value) ? `${(value * 100).toFixed(1)}%` : '—';
   const decimal = value => numeric(value) ? value.toFixed(3) : '—';
@@ -66,9 +66,9 @@
       : 'No fixtures have been collected yet. Waiting for the first match update.';
     const states={not_forecast:'Not forecast yet',needs_history:'Needs more history',available:'Forecast saved'};
     const dateOnly=value=>new Intl.DateTimeFormat('en-GB',{timeZone:'UTC',day:'numeric',month:'short'}).format(new Date(value));
-    table('fixtures-table',['Kickoff · Lagos','League','Match','Forecast'],result.nextFixtures.map(f=>[
+    table('fixtures-table',['Kickoff · Lagos','Competition','Match','Forecast'],result.nextFixtures.map(f=>[
       f.dateOnly?`${dateOnly(f.kickoff)} · time unknown`:lagos(f.kickoff),leagues[f.competition]||f.competition,`${f.home} vs ${f.away}`,states[f.forecast]
-    ]),result.totalFixtures?'No upcoming fixtures are currently recorded for this league.':'Fixtures will appear here after the first collection.');
+    ]),result.totalFixtures?'No upcoming fixtures are currently recorded for this competition.':'Fixtures will appear here after the first collection.');
   }
   const svgNS = 'http://www.w3.org/2000/svg';
   function svgNode(tag, attrs, text) {

@@ -16,6 +16,7 @@ import { PostgresSchema, postgresVersion } from './postgres/database';
 import { shortlist } from './shortlist';
 import { frontendOrigins } from './access';
 import { matchCoverage } from './coverage';
+import { competitions, defaultCompetitions } from './competitions';
 @Catch()
 class ApiErrors implements ExceptionFilter {
     catch(error: unknown, host: ArgumentsHost) {
@@ -81,6 +82,12 @@ class ApiController {
     query: unknown) {
         const q = z.object({ competition: competitionSchema.optional(), status: z.string().optional() }).parse(query);
         return (await this.futuro.store.fixtures()).filter(f => (!q.competition || f.competition === q.competition) && (!q.status || f.status === q.status));
+    }
+    @Get('competitions')
+    competitions() { return Object.entries(competitions).map(([code,v])=>({code,name:v.name,kind:v.kind,automatic:defaultCompetitions.includes(code as typeof defaultCompetitions[number])})); }
+    @Post('sync/competition')
+    syncCompetition(@Body() body: unknown) {
+        return this.providers.syncCompetition(z.object({competition:competitionSchema}).parse(body).competition);
     }
     @Get('coverage')
     async coverage(@Query() query: unknown) {

@@ -7,8 +7,9 @@ import { Providers } from './providers';
 import { Futuro } from './service';
 import { Store } from './store';
 import { Training } from './training';
+import { defaultCompetitions, competitionCodes } from './competitions';
 export const automationConfig = z.object({
-    enabled: z.boolean().default(false), competitions: z.array(competitionSchema).min(1).max(6).default(['PL', 'PD', 'BL1', 'SA', 'FL1']),
+    enabled: z.boolean().default(false), competitions: z.array(competitionSchema).min(1).max(competitionCodes.length).default(defaultCompetitions),
     intervalHours: z.number().int().min(6).max(24).default(6), horizonHours: z.number().int().min(1).max(72).default(24),
     minimumLeadMinutes: z.number().int().min(1).max(180).default(5), maxAttempts: z.number().int().min(1).max(5).default(3),
     retrySeconds: z.number().int().min(10).max(3600).default(60), maxTasksPerTick: z.number().int().min(1).max(100).default(20),
@@ -53,7 +54,7 @@ export class Automation {
     } = {}) {
         this.config = automationConfig.parse(options.config ?? configFromEnvironment());
         this.clock = options.clock ?? (() => new Date());
-        this.sync = options.sync ?? (async (competition) => await providers.syncFootballData(competition));
+        this.sync = options.sync ?? (async (competition) => await providers.syncCompetition(competition));
     }
     onModuleInit() {
         if (!this.config.enabled)
@@ -196,7 +197,7 @@ export class Automation {
     private async nextTask(): Promise<Task | undefined> {
         return await this.store.db.prepare(`SELECT t.* FROM automation_tasks t JOIN automation_runs r ON r.id=t.run_id
       WHERE r.status IN ('running','waiting') AND t.status IN ('pending','retry_wait') AND t.next_attempt_at<=?
-      AND (t.kind IN ('sync','predict') OR (t.kind='settle' AND NOT EXISTS (
+      AND (t.kind='sync' OR (t.kind='predict' AND NOT EXISTS (SELECT 1 FROM automation_tasks s WHERE s.run_id=t.run_id AND s.kind='sync' AND s.status IN ('pending','running','retry_wait'))) OR (t.kind='settle' AND NOT EXISTS (
         SELECT 1 FROM automation_tasks d WHERE d.run_id=t.run_id AND d.kind IN ('sync','predict') AND d.status IN ('pending','running','retry_wait')))
       OR (t.kind='report' AND NOT EXISTS (
         SELECT 1 FROM automation_tasks d WHERE d.run_id=t.run_id AND d.kind<>'report' AND d.status IN ('pending','running','retry_wait'))))
@@ -217,7 +218,7 @@ export class Automation {
             if (age > 6 * 3600000)
                 throw new RetryableError('Sync data is older than six hours; no predictions planned from it', true);
             const horizon = Date.parse(runCreatedAt) + config.horizonHours * 3600000;
-            for (const fixture of (await this.store.fixtures()).filter(f => f.competition === payload.competition && f.provider === 'football-data' &&
+            for (const fixture of (await this.store.fixtures()).filter(f => f.competition === payload.competition && ['football-data','espn'].includes(f.provider) &&
                 f.status === 'scheduled' && !f.dateOnly && Date.parse(f.kickoff) > this.clock().getTime() && Date.parse(f.kickoff) <= horizon)) {
                 const modelRef = config.modelId ?? 'baseline';
                 const tracking = { key: hash([fixture.id, fixture.kickoff, modelRef, config.policyVersion]), kickoff: fixture.kickoff, modelRef, policyVersion: config.policyVersion };
@@ -275,7 +276,7 @@ export class Automation {
     async status() {
         const next = await this.store.db.prepare(`SELECT MIN(t.next_attempt_at) AS at FROM automation_tasks t
       JOIN automation_runs r ON r.id=t.run_id WHERE r.status IN ('running','waiting') AND t.status IN ('pending','retry_wait')
-      AND (t.kind IN ('sync','predict') OR (t.kind='settle' AND NOT EXISTS (
+      AND (t.kind='sync' OR (t.kind='predict' AND NOT EXISTS (SELECT 1 FROM automation_tasks s WHERE s.run_id=t.run_id AND s.kind='sync' AND s.status IN ('pending','running','retry_wait'))) OR (t.kind='settle' AND NOT EXISTS (
         SELECT 1 FROM automation_tasks d WHERE d.run_id=t.run_id AND d.kind IN ('sync','predict') AND d.status IN ('pending','running','retry_wait')))
       OR (t.kind='report' AND NOT EXISTS (
         SELECT 1 FROM automation_tasks d WHERE d.run_id=t.run_id AND d.kind<>'report' AND d.status IN ('pending','running','retry_wait'))))`).get();

@@ -17,7 +17,7 @@ export async function shortlist(store: Store, options: { minProbability: number;
   for (const p of latest.values()) {
     const f: Fixture | undefined = current.get(p.fixtureId);
     if (!f || (options.competition && f.competition !== options.competition)) continue;
-    if (f.provider !== 'football-data' || f.status !== 'scheduled' || f.dateOnly || Date.parse(f.kickoff) <= now.getTime()) { skip('not_a_precise_future_fixture'); continue; }
+    if (!['football-data','espn'].includes(f.provider) || f.status !== 'scheduled' || f.dateOnly || Date.parse(f.kickoff) <= now.getTime()) { skip('not_a_precise_future_fixture'); continue; }
     if (f.kickoff !== p.fixture.kickoff || p.createdAt >= f.kickoff || p.cutoff > now.toISOString()) { skip('fixture_changed_or_invalid_forecast_time'); continue; }
     if (p.blockers.length) { skip('insufficient_inputs'); continue; }
     const candidates = p.candidates.filter((c: any) => Number.isFinite(c.probability) && c.probability >= options.minProbability &&

@@ -35,6 +35,6 @@ Keep secrets in environment settings or ignored `.env` files.
 ## Guides
 
 - [Frontend / Vercel](frontend/README.md) · [Dashboard](DASHBOARD.md) · [Render API](RENDER_DEPLOYMENT.md) · [Neon setup](POSTGRES.md)
-- [Database design](SCHEMA.md) · [Training](TRAINING.md) · [Automation](AUTOMATION.md)
+- [Database design](SCHEMA.md) · [Training](TRAINING.md) · [Automation](AUTOMATION.md) · [Tournaments](TOURNAMENTS.md)
 - [Free data](FREE_DATA_PLAN.md) · [Market research](NICHE_MARKET_RESEARCH.md)
 - [Requirements](REQUIREMENTS.md) · [Implementation plan](IMPLEMENTATION_PLAN.md)

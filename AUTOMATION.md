@@ -1,6 +1,6 @@
 # Scheduled prediction and result tracking
 
-The scheduler runs a durable workflow: refresh fixtures/results, create pre-kickoff forecasts, settle live predictions, and store a performance snapshot. It uses the free football-data.org integration and the configured SQLite or PostgreSQL database. Render can use the external GitHub schedule below; no paid scheduler or queue service is required.
+The scheduler refreshes fixtures/results, creates pre-kickoff forecasts, settles live predictions, and stores a performance snapshot. It uses football-data.org and public ESPN tournament feeds with the configured SQLite or PostgreSQL database. Render can use the external GitHub schedule below; no paid scheduler or queue service is required. See [tournament coverage](TOURNAMENTS.md) for source limitations and optional competitions.
 
 ## Enable it
 
@@ -9,7 +9,7 @@ Create a local `.env` from `.env.example` if needed, and configure the free acco
 ```dotenv
 FOOTBALL_DATA_TOKEN=YOUR_FREE_TOKEN
 AUTOMATION_ENABLED=true
-AUTOMATION_COMPETITIONS=PL,PD,BL1,SA,FL1
+AUTOMATION_COMPETITIONS=PL,PD,BL1,SA,FL1,CL,EL,ECL,UNL,WCQ_EU,WC
 AUTOMATION_INTERVAL_HOURS=6
 AUTOMATION_HORIZON_HOURS=24
 AUTOMATION_MODEL_ID=
@@ -33,8 +33,8 @@ Available cadence is 6–24 hours. Changing environment settings requires restar
 
 ## Workflow behavior
 
-1. Sync the configured leagues, sharing the provider response cache. Successful leagues continue even if another league fails.
-2. Plan forecasts only for scheduled football-data.org fixtures with precise kickoff times in the next 24 hours. Date-only OpenFootball records and demo fixtures are excluded from automatic prospective forecasting.
+1. Sync the configured competitions, sharing provider response caches. Predictions wait until all sync tasks finish or exhaust retries; successful competitions can continue after another fails.
+2. Plan forecasts for scheduled football-data.org or ESPN fixtures with precise kickoff times in the next 24 hours. Date-only OpenFootball records and demo fixtures are excluded from automatic prospective forecasting. See [tournament sources and safeguards](TOURNAMENTS.md).
 3. Allow at least five minutes before kickoff when starting a scoring task. The persistence transaction checks the clock and current fixture again after scoring: forecasts that finish after kickoff or whose kickoff/status changed are rejected.
 4. Save every eligible forecast or statistical abstention, including its original cutoff, features, model and missing-evidence warnings. The automatic identity is fixture + kickoff + selected model reference + policy version. It is saved atomically with the prediction, so restarts do not save duplicates. Manual forecasts remain separate.
 5. Once sync/prediction tasks reach terminal states, settle completed **live-mode** predictions against current regulation results. Existing result-correction/revision handling is retained. Postponed/cancelled games without a completed supported result remain pending; no bookmaker-specific void rule is invented.
@@ -47,7 +47,7 @@ No old predictions or settlements are replaced. Historical and synthetic experim
 ## Limits and retries
 
 - Current fixture/result responses cache for six hours; standings retain their twelve-hour cache.
-- All uncached provider calls reserve their budget transactionally in the configured database, shared by manual endpoints, scheduler runs and retries. Local limits are eight requests/minute and 200/provider/UTC day. The daily cap is our own budget policy, not a claim about the provider's published daily allowance.
+- All uncached provider calls reserve their budget transactionally in the configured database, shared by manual endpoints, scheduler runs and retries. Local limits are eight requests/minute for football-data.org, six for other providers, and 200/provider/UTC day. The daily cap is our own budget policy, not a claim about the provider's published daily allowance.
 - A normal five-league, four-cycle day is approximately 20 fixture-list requests before retries/manual work. Results and upcoming fixtures come from the same league request.
 - HTTP 429 and supported 503 `Retry-After` responses establish a persisted provider-wide cooldown. Other leagues/routes wait rather than sending more calls during that cooldown. A missing 429 header defaults to one minute.
 - Successful football-data.org responses are also checked for remaining quota (`X-RequestsAvailable` or `X-Requests-Available-Minute`) and reset seconds (`X-RequestCounter-Reset`). A zero counter pauses further uncached calls until reset, before another request hits HTTP 429. Valid cached data remains usable. Invalid/missing quota headers retain the local safeguards; a zero counter without a usable reset gets a conservative one-minute pause. See the [official v4 header reference](https://docs.football-data.org/general/v4/lookup_tables.html).

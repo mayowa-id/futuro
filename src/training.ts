@@ -9,6 +9,8 @@ import { modelIdentity, projectFeatures } from './projections';
 import { Research } from './research';
 import { Futuro, modelSchema, ModelResult, Scorer } from './service';
 import { Store } from './store';
+import { isTournament } from './competitions';
+import { RetryableError } from './errors';
 const digest = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
 const minimums = { train: 40, validation: 20, test: 20 };
 const startInput = z.object({ datasetId: z.string().min(1), name: z.string().min(1).max(200).default('Poisson rate tuning') });
@@ -83,6 +85,7 @@ export class Training {
         const fixtures = new Map(corpus.fixtures.map(f => [f.id, f]));
         const examples: Prepared[] = await Promise.all(dataset.members.map(async (member) => {
             const fixture = fixtures.get(String(member.fixture_id));
+            if(fixture&&isTournament(fixture.competition))throw new Error('Tournament training needs a separately validated feature/model pipeline; this trainer accepts domestic league datasets only');
             if (!fixture || corpus.revisions.get(fixture.id) !== Number(member.result_revision_id))
                 throw new Error('A frozen dataset result changed; create a new dataset snapshot before training');
             const features = await buildFeatures(this.store, fixture, String(member.kickoff), mode, corpus);
@@ -244,6 +247,7 @@ export class Training {
         if ((artifact.metadata.mode === 'demo') !== (mode === 'demo'))
             throw new Error('Demo-trained models cannot score real fixtures, and vice versa');
         return async (features) => {
+            if(features.featureVersion!=='form-v1')throw new RetryableError('This trained league model is not validated for tournament features',false);
             const results = z.array(modelSchema).length(1).parse(await this.worker({ action: 'predict', features: [features], artifactJson, artifactHash }));
             if (modelIdentity(results[0]) !== modelId)
                 throw new Error('Scored model identity does not match the registered artifact');
