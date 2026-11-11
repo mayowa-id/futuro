@@ -15,6 +15,7 @@ import { AccessGuard } from './access';
 import { PostgresSchema, postgresVersion } from './postgres/database';
 import { shortlist } from './shortlist';
 import { frontendOrigins } from './access';
+import { matchCoverage } from './coverage';
 @Catch()
 class ApiErrors implements ExceptionFilter {
     catch(error: unknown, host: ArgumentsHost) {
@@ -80,6 +81,11 @@ class ApiController {
     query: unknown) {
         const q = z.object({ competition: competitionSchema.optional(), status: z.string().optional() }).parse(query);
         return (await this.futuro.store.fixtures()).filter(f => (!q.competition || f.competition === q.competition) && (!q.status || f.status === q.status));
+    }
+    @Get('coverage')
+    async coverage(@Query() query: unknown) {
+        const input=z.object({competition:competitionSchema.optional()}).parse(query);
+        return matchCoverage(this.futuro.store,input.competition);
     }
     @Get('shortlist')
     async shortlist(@Query() query: unknown) {
@@ -230,6 +236,7 @@ export async function createApp(store: Store, futuro = new Futuro(store), traini
     postgres?: PostgresSchema;
     frontendOrigins?: string[];
 } = {}) {
+    const allowedOrigins = frontendOrigins(security.frontendOrigins?.join(',') ?? process.env.FRONTEND_ORIGINS);
     @Module({ controllers: [ApiController], providers: [
             { provide: 'FUTURO', useValue: futuro }, { provide: 'PROVIDERS', useValue: new Providers(store) }, { provide: 'TRAINING', useValue: training },
             { provide: 'AUTOMATION', useValue: automation },
@@ -239,7 +246,6 @@ export async function createApp(store: Store, futuro = new Futuro(store), traini
     class AppModule {
     }
     const app = await NestFactory.create(AppModule, { logger: ['error', 'warn'], bodyParser: true });
-    const allowedOrigins = frontendOrigins(security.frontendOrigins?.join(',') ?? process.env.FRONTEND_ORIGINS);
     app.enableCors({ origin: allowedOrigins, methods: ['GET','HEAD','OPTIONS'], allowedHeaders: ['Authorization','Content-Type'],
         credentials: false, maxAge: 600 });
     app.useGlobalFilters(new ApiErrors());

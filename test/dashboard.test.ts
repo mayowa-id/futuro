@@ -71,6 +71,7 @@ test('independent frontend stays public while API authentication and exact-origi
     assert.ok(!(await (await fetch(`${url}/config.js`)).text()).includes(token));
     assert.equal((await fetch(`${apiUrl}/analytics?mode=demo`)).status,401);
     assert.equal((await fetch(`${apiUrl}/shortlist`)).status,401);
+    assert.equal((await fetch(`${apiUrl}/coverage`)).status,401);
     assert.equal((await fetch(`${apiUrl}/dashboard`)).status,404);
     assert.equal((await fetch(`${apiUrl}/automation/tick`,{ method: 'POST' })).status,401);
     const preflight = await fetch(`${apiUrl}/analytics`,{method:'OPTIONS',headers:{Origin:url,'Access-Control-Request-Method':'GET','Access-Control-Request-Headers':'authorization'}});
@@ -87,13 +88,22 @@ test('independent frontend stays public while API authentication and exact-origi
     assert.equal(report.byProbabilityBand['80_to_below_90%'].candidates,6);
     assert.equal(report.hypotheticalFlatStakeRoi,null);
     assert.match(report.largestErrors[0].home,/Demo Team/);
+    const coverage=await (await fetch(`${apiUrl}/coverage`,{headers:{Authorization:`Bearer ${token}`}})).json();
+    assert.equal(coverage.totalFixtures,67);
+    assert.equal(coverage.completedFixtures,66);
+    assert.equal(coverage.liveForecasts,1);
+    assert.equal(coverage.nextFixtures[0].forecast,'available');
+    const otherLeague=await (await fetch(`${apiUrl}/coverage?competition=PD`,{headers:{Authorization:`Bearer ${token}`}})).json();
+    assert.equal(otherLeague.totalFixtures,0);
+    assert.deepEqual(otherLeague.nextFixtures,[]);
   } finally { await close(); }
 });
 
 test('frontend origin configuration accepts exact trusted origins and rejects broad or credentialed URLs',()=>{
   assert.deepEqual(frontendOrigins(undefined),[]);
   assert.deepEqual(frontendOrigins('https://futuro.vercel.app,http://localhost:4173,https://futuro.vercel.app'),['https://futuro.vercel.app','http://localhost:4173']);
-  for(const value of ['*','https://*.vercel.app','https://user:password@example.com','http://example.com','https://example.com/path'])
+  assert.deepEqual(frontendOrigins(' https://FUTURO.vercel.app/ , https://futuro.vercel.app:443, http://localhost:4173/ '),['https://futuro.vercel.app','http://localhost:4173']);
+  for(const value of ['*','https://*.vercel.app','https://user:password@example.com','http://example.com','https://example.com/path','https://example.com/?token=secret','https://example.com/#section'])
     assert.throws(()=>frontendOrigins(value),/FRONTEND_ORIGINS/);
 });
 
@@ -107,6 +117,8 @@ test('browser dashboard authenticates, filters real metrics, handles failures an
     const errors: string[] = [];
     page.on('pageerror',error=>errors.push(error.message));
     await page.goto(url);
+    assert.equal(await page.locator('.wordmark').innerText(),'futuro/');
+    assert.equal(await page.locator('#connection').count(),0);
     await page.locator('#access-token').fill('wrong-but-long-enough-test-token-to-try');
     await page.locator('#login-form button').click();
     await page.getByText('The API access token was not accepted. Please reconnect.').waitFor();
@@ -115,6 +127,9 @@ test('browser dashboard authenticates, filters real metrics, handles failures an
     await page.locator('#login-form button').click();
     await page.locator('#dashboard').waitFor({state:'visible'});
     await page.waitForFunction(()=>document.querySelector('#metrics')?.textContent?.includes('0 market candidates'));
+    assert.match(await page.locator('#coverage-summary').innerText(),/67/);
+    assert.match(await page.locator('#fixtures-table').innerText(),/Forecast saved/);
+    assert.ok(!/Neon|SQLite|postgresql|Connected/.test(await page.locator('body').innerText()));
     await page.locator('#include-unpriced').check();
     await page.locator('.pick').waitFor();
     assert.match(await page.locator('.pick').innerText(),/80\.0%/);
@@ -148,6 +163,7 @@ test('browser dashboard authenticates, filters real metrics, handles failures an
     await page.locator('#disconnect').click();
     await page.locator('#login-panel').waitFor({state:'visible'});
     assert.equal(await page.locator('#metrics').innerText(),'');
+    assert.equal(await page.locator('#coverage-summary').innerText(),'');
     assert.deepEqual(await page.evaluate(()=>[localStorage.length,sessionStorage.length]),[0,0]);
     assert.deepEqual(errors,[]);
   } finally { await browser?.close(); await close(); }
