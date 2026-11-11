@@ -74,7 +74,7 @@ if ($fixture) {
 
 Free provider scores/schedules are delayed. Manual sync remains available, and an optional local scheduler now syncs results/fixtures, generates pre-kickoff forecasts and settles them every six hours. See [AUTOMATION.md](AUTOMATION.md) to enable it and inspect run history. Current matches cache for six hours, tables for twelve. Shared free-provider limits, cooldowns and bounded retries apply; no paid fallback is used. History entitlement is not assumed.
 
-Team identities use exact normalized names and explicit aliases in **config/team-aliases.json**. Audit source names when combining providers; add aliases only for verified equivalents. The same home/away teams within a league season map to one fixture, keeping postponements stable. This identity scheme is intended for the supported home-and-away domestic leagues, not arbitrary cup formats. Football-data records take precedence over OpenFootball fallbacks for matching fixtures.
+Team identities use exact normalized names and explicit aliases in **config/team-aliases.json**. Audit source names when combining providers; add aliases only for verified equivalents. Domestic league identity uses competition, season and home/away teams. Tournament identity uses competition, provider and native event ID to distinguish repeat opponents and replays. Both remain stable after postponements. Football-data records take precedence over OpenFootball fallbacks for matching fixtures. See [tournament coverage](TOURNAMENTS.md) for sources and regulation-time safeguards.
 
 ## Manual evidence
 

@@ -31,6 +31,23 @@ async function setup() {
     return { store, clock, futuro, scorer, sync, make, advance: (ms: number) => { time += ms; }, calls: () => calls,
         target: () => target, finish: () => { target = { ...target, status: 'finished', score: [2, 0] }; } };
 }
+test('predictions wait for other competition histories while synchronization is retrying', async () => {
+    const s = await setup();
+    let ready = false;
+    const automation = s.make({ config: { enabled: false, competitions: ['PL','UNL'] }, sync: async code => {
+        if (code === 'UNL' && !ready) throw new RetryableError('Temporary feed delay', true, new Date(s.clock().getTime()+120000).toISOString());
+        return s.sync();
+    } });
+    try {
+        await automation.tick();
+        assert.equal((await s.store.predictions('live')).length, 0);
+        assert.equal(s.calls(), 0);
+        ready = true;
+        s.advance(121000);
+        await automation.tick();
+        assert.equal((await s.store.predictions('live')).length, 1);
+    } finally { await s.store.close(); }
+});
 test('daily flow predicts before kickoff, deduplicates across slots, settles and snapshots live metrics', async () => {
     const s = await setup(), automation = s.make();
     try {

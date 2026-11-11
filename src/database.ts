@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Pool, PoolClient, types } from 'pg';
 import { postgresConfig, PostgresSchema } from './postgres/database';
 import { Fixture, hash } from './domain';
+import { competitions } from './competitions';
 
 export type Row = Record<string, any>;
 export interface Database {
@@ -113,8 +114,7 @@ export class PostgresDatabase implements Database {
   }
   async exec(sql: string) { await this.query(sql, []); }
   async ingest(provider: string, capturedAt: string, raw: unknown, fixtures: Fixture[]) {
-    const names: Record<string,string> = { PL: 'Premier League', PD: 'La Liga', BL1: 'Bundesliga', SA: 'Serie A', FL1: 'Ligue 1', PPL: 'Primeira Liga' };
-    const rows = fixtures.map(f => ({ payload: JSON.stringify(f), competitionName: names[f.competition],
+    const rows = fixtures.map(f => ({ payload: JSON.stringify(f), competitionName: competitions[f.competition].name,
       seasonId: hash([f.competition,f.season]), homeId: hash([f.competition,f.homeKey]), awayId: hash([f.competition,f.awayKey]) }));
     await this.transaction(async () => { await this.query(`SELECT "${this.schema}".ingest_football(?,?,?,?,?::jsonb)`,
       [hash([provider,raw]),provider,capturedAt,JSON.stringify(raw),JSON.stringify(rows)]); });

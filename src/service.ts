@@ -4,6 +4,7 @@ import { buildFeatures, featureBlockers } from './features';
 import { evidenceInput, Evidence, Market, marketSchema, Mode, PredictionTracking, settledWin } from './domain';
 import { RetryableError } from './errors';
 import { Store } from './store';
+import { isTournament } from './competitions';
 const probabilitiesSchema = z.object(Object.fromEntries(marketSchema.options.map(m => [m, z.number().min(0).max(1)])) as Record<Market, z.ZodNumber>);
 export const modelSchema = z.object({ modelVersion: z.string(), rates: z.array(z.number().finite()).length(2),
     probabilities: probabilitiesSchema, calibrated: z.literal(false), limitations: z.array(z.string()),
@@ -52,7 +53,10 @@ export class Futuro {
         const features = await buildFeatures(this.store, target, cutoff, mode);
         const evidence = (await this.store.evidence(fixtureId)).filter(e => e.observedAt <= cutoff && e.publishedAt <= cutoff);
         const blockers = featureBlockers(target, features);
-        const model = blockers.length ? null : modelSchema.parse(await this.scorer(features));
+        let model = blockers.length ? null : modelSchema.parse(await this.scorer(features));
+        if(model&&isTournament(target.competition))model={...model,
+          modelVersion:model.modelVersion==='poisson-form-v1'?'poisson-tournament-research-v1':`${model.modelVersion}:tournament-context-v1`,
+          specification:{...model.specification,featureVersion:features.featureVersion,formScope:features.formScope,aliasPolicyHash:features.aliasPolicyHash}};
         const warnings = ['Uncalibrated research baseline; no demonstrated betting edge', 'Corner data unavailable; no corner recommendations',
             'Standings, injuries, motivation and source opinions are recorded evidence, not fitted model adjustments'];
         if (!evidence.some(e => e.kind === 'injury'))
@@ -61,6 +65,7 @@ export class Futuro {
             warnings.push('Kickoff time unknown; date-only cutoff excludes same-day results');
         if (mode !== 'live')
             warnings.push('Reconstructed experiment using currently stored results; not a genuine historical information snapshot');
+        if(isTournament(target.competition))warnings.push('Tournament research estimate: opponent strength, rotation, competition tiers and aggregate-score tactics are not calibrated');
         const candidates = model ? marketSchema.options.map(market => {
             const quote = evidence.filter(e => e.kind === 'quote' && e.payload.market === market &&
                 Date.parse(cutoff) - Date.parse(e.publishedAt) <= 24 * 3600000).sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0];
