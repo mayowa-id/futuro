@@ -4,20 +4,20 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' __FUTURO_API_ORIGIN__; img-src 'self' data:; base-uri 'none'; form-action 'self'">
   <meta name="description" content="Saved football forecasts, match results and model performance.">
-  <title>Futuro — Football research</title>
+  <title>futuro — Football research</title>
   <link rel="stylesheet" href="/app.css"><script src="/config.js" defer></script><script src="/app.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="masthead">
-    <div class="masthead-inner"><a class="wordmark" href="/" aria-label="Futuro home">FUTURO<span aria-hidden="true">/</span></a><span class="edition">FOOTBALL RESEARCH<br>RESULTS &amp; EVALUATION</span><span id="connection" class="connection">Not connected</span></div>
+    <div class="masthead-inner"><a class="wordmark" href="/" aria-label="futuro home">futuro<span aria-hidden="true">/</span></a><span class="edition">FOOTBALL RESEARCH<br>RESULTS &amp; EVALUATION</span></div>
     <nav id="session-nav" aria-label="Sections" hidden><a href="#overview" class="nav-active">Overview</a><a href="#shortlist">Shortlist</a><a href="#diagnostics">Breakdowns</a><a href="#sources">Sources</a><span class="nav-meta">LAGOS · UTC+1</span></nav>
   </header>
   <main id="main">
     <div class="page-heading" id="overview"><div><p class="eyebrow">THE RECORD</p><h1>Performance</h1><p class="subtitle">Saved forecasts, measured against the final score.</p></div><div class="header-actions" id="session-actions" hidden><button id="refresh" class="button secondary">Refresh data <span aria-hidden="true">↻</span></button><button id="disconnect" class="text-button">Sign out</button></div></div>
     <section id="login-panel" class="login-panel" aria-labelledby="login-title">
       <div class="login-intro"><span class="section-number">01 / ACCESS</span><h2 id="login-title">Open your workspace.</h2><p>View your forecasts, compare outcomes and keep track of what needs work.</p><dl><div><dt>Forecast history</dt><dd>Original picks and results</dd></div><div><dt>Model evaluation</dt><dd>Accuracy, calibration and variance</dd></div><div><dt>Match shortlist</dt><dd>Upcoming fixtures with recorded evidence</dd></div></dl></div>
-      <div class="login-content"><form id="login-form"><label for="access-token">API access token</label><input id="access-token" type="password" autocomplete="off" spellcheck="false" placeholder="Enter your access token"><p class="fine-print">Use the token configured for your Futuro API. It stays in this tab and clears when you sign out or reload.</p><button class="button primary" type="submit">Continue <span aria-hidden="true">→</span></button></form><p class="local-note">Running a local API without authentication? Leave the field empty.</p></div>
+      <div class="login-content"><form id="login-form"><label for="access-token">API access token</label><input id="access-token" type="password" autocomplete="off" spellcheck="false" placeholder="Enter your access token"><p class="fine-print">Use your workspace access token. It stays in this tab and clears when you sign out or reload.</p><button class="button primary" type="submit">Continue <span aria-hidden="true">→</span></button></form><p class="local-note">Running locally without authentication? Leave the field empty.</p></div>
     </section>
     <p id="message" class="message" role="status" aria-live="polite" hidden></p>
     <div id="dashboard" hidden>
@@ -28,7 +28,8 @@
         <label>Model<select id="model"><option value="">All models</option></select></label>
         <label>Selection<select id="selection"><option value="all">All research candidates</option><option value="preference_passed">Preference-passing only</option></select></label>
       </section>
-      <div class="section-kicker"><h2>Summary</h2><span id="updated" class="muted">Not loaded</span></div>
+      <section class="coverage-section" aria-labelledby="coverage-title"><div class="section-kicker"><h2 id="coverage-title">Match coverage</h2><span class="muted">REAL FIXTURES · SELECTED LEAGUE</span></div><div id="coverage-summary" class="coverage-summary"></div><p id="coverage-note" class="data-note"></p><div id="fixtures-table" class="table-scroll"></div></section>
+      <div class="section-kicker"><h2>Results summary</h2><span id="updated" class="muted">Not loaded</span></div>
       <div class="metrics" id="metrics" aria-live="polite"></div>
       <p class="data-note" id="analysis-note">Latest forecast per fixture, settled against the current result. Multiple markets on one match are correlated.</p>
       <div class="chart-grid">
@@ -42,5 +43,5 @@
       <footer class="page-footer"><span id="workflow-status">Workflow status unavailable</span><span>Research estimates. Returns are hypothetical, not placed bets.</span></footer>
     </div>
   </main>
-  <div class="site-footer"><span>FUTURO / FOOTBALL RESEARCH</span><span>Keep the prediction. Record the result.</span></div>
+  <div class="site-footer"><span>futuro / FOOTBALL RESEARCH</span><span>Keep the prediction. Record the result.</span></div>
 </body></html>

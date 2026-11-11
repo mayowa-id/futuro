@@ -22,8 +22,8 @@
   function disconnect(text = '') {
     state.controller?.abort(); state.generation++; state.token = ''; state.report = null; state.connected = false;
     $('access-token').value = ''; $('dashboard').hidden = true; $('login-panel').hidden = false; $('session-actions').hidden = true; $('session-nav').hidden = true;
-    $('connection').textContent = 'Not connected'; $('connection').className = 'connection';
-    ['metrics','calibration-chart','calibration-table','trend-chart','shortlist-content','groups-table','sources-table','errors-table'].forEach(id => $(id).replaceChildren());
+    ['metrics','calibration-chart','calibration-table','trend-chart','shortlist-content','groups-table','sources-table','errors-table','coverage-summary','fixtures-table'].forEach(id => $(id).replaceChildren());
+    $('coverage-note').textContent='';
     $('model').replaceChildren(new Option('All models', '')); $('workflow-status').textContent = 'Workflow status unavailable'; $('updated').textContent = 'Not loaded';
     $('refresh').disabled = false; $('login-form').querySelector('button').disabled = false;
     message(text);
@@ -57,6 +57,18 @@
       const card = node('div', undefined, 'metric'); card.append(node('div',title,'metric-label'),node('div',value,'metric-value'),node('div',note,'metric-note')); return card;
     }));
     $('analysis-note').textContent = report.candidates ? 'Latest forecast per fixture, current result revision only. Multiple markets on one fixture are correlated; candidate count is not independent match count.' : 'No settled candidates match these filters yet. Missing metrics are shown as —, not zero. Live, historical and demo records remain separate.';
+  }
+  function coverage(result) {
+    const values=[['Matches collected',result.totalFixtures],['Upcoming fixtures',result.upcomingFixtures],['Saved live forecasts',result.liveForecasts]];
+    $('coverage-summary').replaceChildren(...values.map(([title,value])=>{const item=node('div',title,'coverage-stat');item.append(node('strong',integer(value)));return item;}));
+    $('coverage-note').textContent=result.totalFixtures
+      ? `${integer(result.completedFixtures)} completed matches available. Forecasting window: the 24 hours before kickoff. Performance appears after forecasted matches finish.`
+      : 'No fixtures have been collected yet. Waiting for the first match update.';
+    const states={not_forecast:'Not forecast yet',needs_history:'Needs more history',available:'Forecast saved'};
+    const dateOnly=value=>new Intl.DateTimeFormat('en-GB',{timeZone:'UTC',day:'numeric',month:'short'}).format(new Date(value));
+    table('fixtures-table',['Kickoff · Lagos','League','Match','Forecast'],result.nextFixtures.map(f=>[
+      f.dateOnly?`${dateOnly(f.kickoff)} · time unknown`:lagos(f.kickoff),leagues[f.competition]||f.competition,`${f.home} vs ${f.away}`,states[f.forecast]
+    ]),result.totalFixtures?'No upcoming fixtures are currently recorded for this league.':'Fixtures will appear here after the first collection.');
   }
   const svgNS = 'http://www.w3.org/2000/svg';
   function svgNode(tag, attrs, text) {
@@ -108,8 +120,11 @@
     table('groups-table',['Segment','Fixtures','Candidates','Hit rate','Brier','Residual variance','Hypothetical ROI'],
       rows.map(([key,r])=>[label(key),integer(r.fixtures),integer(r.candidates),pct(r.hitRate),decimal(r.brierScore),decimal(r.residualSampleVariance),pct(r.hypotheticalFlatStakeRoi)]),'No settled candidates in this segment.');
   }
-  function picks(result) {
+  function picks(result, matchCoverage) {
     if ($('mode').value !== 'live') return empty('shortlist-content','The shortlist is for live forecasts. Switch analysis mode to Live forecasts to view it.');
+    const next=matchCoverage?.nextFixtures?.[0];
+    if (!result.picks.length && next && Date.parse(next.kickoff)-Date.parse(matchCoverage.asOf)>86400_000)
+      return empty('shortlist-content',`The next recorded fixture is ${lagos(next.kickoff)}. Collection cycles generate forecasts within 24 hours of kickoff.`);
     if (!result.picks.length) return empty('shortlist-content',$('include-unpriced').checked ? 'No saved live forecasts match the upcoming-fixture and probability filters.' : 'No upcoming picks pass the price and preference filters. Enable unpriced research to inspect saved forecasts without matching prices.');
     $('shortlist-content').replaceChildren(...result.picks.map(p => {
       const card = node('article',undefined,'pick'), meta=node('div',undefined,'pick-meta'), selection=node('div',undefined,'pick-selection');
@@ -137,24 +152,25 @@
   async function load() {
     state.controller?.abort(); const controller = new AbortController(); state.controller=controller;
     const generation = ++state.generation;
-    $('refresh').disabled = true; $('login-form').querySelector('button').disabled=true; message('Loading your research…');
+    $('refresh').disabled = true; $('login-form').querySelector('button').disabled=true; message('Loading results…');
     state.report = null;
     if (state.connected) {
       $('updated').textContent='Updating…'; $('metrics').replaceChildren();
-      ['calibration-chart','trend-chart','groups-table','sources-table','errors-table','shortlist-content'].forEach(id=>empty(id,'Loading…'));
+      ['calibration-chart','trend-chart','groups-table','sources-table','errors-table','shortlist-content','fixtures-table'].forEach(id=>empty(id,'Loading…'));
+      $('coverage-summary').replaceChildren();$('coverage-note').textContent='';
       $('calibration-table').replaceChildren(); $('workflow-status').textContent='Updating workflow status…';
     }
     try {
-      const capability = await request('/capabilities',controller.signal);
+      const modelList = await request('/models',controller.signal);
       if(generation!==state.generation)return;
       state.connected=true; $('dashboard').hidden=false; $('login-panel').hidden=true; $('session-actions').hidden=false; $('session-nav').hidden=false;
-      $('connection').textContent=capability.storage==='postgresql'?'Connected · Neon':'Connected · SQLite'; $('connection').className='connection connected';
       const filters = new URLSearchParams({mode:$('mode').value,selection:$('selection').value});
       [['competition','competition'],['market','market'],['model','modelId']].forEach(([id,key])=>{if($(id).value)filters.set(key,$(id).value);});
       const upcoming = new URLSearchParams({preferenceOnly:String(!$('include-unpriced').checked),minProbability:'.65',limit:'12'});
       if($('competition').value)upcoming.set('competition',$('competition').value);
-      const paths=[`/analytics?${filters}`, '/models', '/sources/performance', '/automation/status', $('mode').value==='live'?`/shortlist?${upcoming}`:null];
-      const results=await Promise.allSettled(paths.map(path=>path?request(path,controller.signal):Promise.resolve({picks:[]})));
+      const coverageQuery=new URLSearchParams();if($('competition').value)coverageQuery.set('competition',$('competition').value);
+      const paths=[`/analytics?${filters}`, null, '/sources/performance', '/automation/status', $('mode').value==='live'?`/shortlist?${upcoming}`:null,`/coverage?${coverageQuery}`];
+      const results=await Promise.allSettled(paths.map((path,index)=>index===1?Promise.resolve(modelList):path?request(path,controller.signal):Promise.resolve({picks:[]})));
       if(generation!==state.generation)return;
       const authFailure=results.find(r=>r.status==='rejected'&&r.reason.auth);
       if(authFailure)throw authFailure.reason;
@@ -168,15 +184,17 @@
       if(sources)table('sources-table',['Source','Captured before kickoff','Settled picks','Wins','Hit rate'],sources.sources.map(s=>[s.name,integer(s.capturedPreKickoff),integer(s.settledRecommendations),integer(s.wins),pct(s.hitRate)]),'No source recommendations have been recorded yet.');
       else empty('sources-table','Source performance could not be loaded.');
       const workflow=value(3);
-      $('workflow-status').textContent=workflow?`${workflow.enabled?'Local timer enabled':'Manual / external schedule'} · Latest run: ${workflow.latestRun?workflow.latestRun.status:'none'} · Provider token ${workflow.tokenConfigured?'configured':'missing'}`:'Workflow status could not be loaded.';
-      if(value(4))picks(value(4));else empty('shortlist-content','Shortlist could not be loaded.');
+      const latest=workflow?.latestRun;
+      $('workflow-status').textContent=workflow?(latest?`Latest match update: ${latest.status} · ${lagos(latest.completed_at||latest.created_at)}`:'Waiting for the first match update.'):'Match update status is unavailable.';
+      if(value(4))picks(value(4),value(5));else empty('shortlist-content','Shortlist could not be loaded.');
+      if(value(5))coverage(value(5));else empty('fixtures-table','Fixture coverage could not be loaded.');
       const failed=results.filter(r=>r.status==='rejected').length;
       $('updated').textContent=`Updated ${lagos(new Date())}`;
       message(failed?`${failed} panel request(s) failed. Available panels are shown; refresh to retry.`:'');
     } catch(error) {
       if(generation!==state.generation||error.name==='AbortError')return;
       if(error.auth)disconnect(error.message);
-      else {message('Could not connect to Futuro. Check the service and try again.');if(state.connected)$('updated').textContent='Refresh failed';}
+      else {message('Could not load results. Try again in a moment.');if(state.connected)$('updated').textContent='Refresh failed';}
     } finally {if(generation===state.generation){$('refresh').disabled=false;$('login-form').querySelector('button').disabled=false;}}
   }
   $('login-form').addEventListener('submit',event=>{event.preventDefault();state.token=$('access-token').value.trim();$('access-token').value='';load();});

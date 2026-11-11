@@ -8,6 +8,8 @@ Vercel serves the public sign-in HTML, stylesheet and script. All research data 
 
 ## What it shows
 
+- Real fixture coverage and upcoming matches, even before any live predictions have settled. This view follows the league filter and stays independent of the analysis mode, market and model filters. Automatic forecasts are generated within 24 hours of kickoff; future fixtures outside that window remain visible as not yet forecast.
+
 - Settled fixture/candidate counts, observed hit rate, Brier score, calibration gap, residual variance and hypothetical flat-stake ROI.
 - Calibration bins: mean estimated probability versus observed outcomes, with candidate counts and an accessible data table.
 - Monthly observed hit rate versus mean model probability.

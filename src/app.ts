@@ -15,6 +15,7 @@ import { AccessGuard } from './access';
 import { PostgresSchema, postgresVersion } from './postgres/database';
 import { shortlist } from './shortlist';
 import { frontendOrigins } from './access';
+import { matchCoverage } from './coverage';
 @Catch()
 class ApiErrors implements ExceptionFilter {
     catch(error: unknown, host: ArgumentsHost) {
@@ -80,6 +81,11 @@ class ApiController {
     query: unknown) {
         const q = z.object({ competition: competitionSchema.optional(), status: z.string().optional() }).parse(query);
         return (await this.futuro.store.fixtures()).filter(f => (!q.competition || f.competition === q.competition) && (!q.status || f.status === q.status));
+    }
+    @Get('coverage')
+    async coverage(@Query() query: unknown) {
+        const input=z.object({competition:competitionSchema.optional()}).parse(query);
+        return matchCoverage(this.futuro.store,input.competition);
     }
     @Get('shortlist')
     async shortlist(@Query() query: unknown) {
